@@ -1,0 +1,24 @@
+[Unit]
+Description=ZeroLegend Game Server (Node.js + PM2)
+After=network.target
+
+[Service]
+Type=simple
+User=zero
+WorkingDirectory=/home/zero/ss
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="NODE_ENV=production"
+
+# Avvia il server con PM2
+ExecStart=/usr/local/bin/pm2 start ecosystem.config.js --no-daemon
+
+# Restart automatico se crash
+Restart=always
+RestartSec=10
+
+# Limiti di risorse
+StandardOutput=append:/home/zero/ss/logs/pm2-stdout.log
+StandardError=append:/home/zero/ss/logs/pm2-stderr.log
+
+[Install]
+WantedBy=multi-user.target
