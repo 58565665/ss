@@ -20,7 +20,6 @@ function rand(min, max) {
   return Math.floor(Math.random() * (max - min)) + min;
 }
 
-// Inizializza il cibo
 function spawnFood() {
   while (food.length < MAX_FOOD) {
     food.push({
@@ -32,7 +31,6 @@ function spawnFood() {
   }
 }
 
-// Inizializza i virus (spine)
 function spawnViruses() {
   while (viruses.length < MAX_VIRUSES) {
     viruses.push({
@@ -63,23 +61,19 @@ wss.on('connection', (ws) => {
     try {
       const msg = JSON.parse(message);
 
-      // 1. JOIN / RESPAWN
       if (msg.t === 'join' || msg.t === 'respawn') {
         const color = msg.color || `hsl(${rand(0, 360)}, 80%, 60%)`;
-        const skinUrl = msg.skin || '';
         players[playerId] = {
           id: playerId,
           name: msg.name || 'Player',
           color: color,
-          skin: skinUrl,
+          skin: msg.skin || '',
           alive: true,
           cells: [
             {
               x: rand(200, WORLD_SIZE - 200),
               y: rand(200, WORLD_SIZE - 200),
-              mass: INITIAL_MASS,
-              vx: 0,
-              vy: 0
+              mass: INITIAL_MASS
             }
           ]
         };
@@ -88,7 +82,6 @@ wss.on('connection', (ws) => {
         broadcast({ t: 'chat', name: 'System', msg: `${players[playerId].name} joined the game!` });
       }
 
-      // 2. CHAT MULTIPLAYER (Broadcast a tutti i client)
       if (msg.t === 'chat') {
         const p = players[playerId];
         if (p && msg.msg) {
@@ -100,7 +93,6 @@ wss.on('connection', (ws) => {
         }
       }
 
-      // 3. INPUT DIREZIONE
       if (msg.t === 'input' && players[playerId] && players[playerId].alive) {
         const p = players[playerId];
         const dx = msg.dx;
@@ -114,14 +106,12 @@ wss.on('connection', (ws) => {
             c.x += (dx / len) * speed;
             c.y += (dy / len) * speed;
 
-            // Limiti mappa
             c.x = Math.max(10, Math.min(WORLD_SIZE - 10, c.x));
             c.y = Math.max(10, Math.min(WORLD_SIZE - 10, c.y));
           });
         }
       }
 
-      // 4. EIEZIONE MASSA (Tasto W)
       if (msg.t === 'eject' && players[playerId] && players[playerId].alive) {
         const p = players[playerId];
         p.cells.forEach((c) => {
@@ -140,7 +130,6 @@ wss.on('connection', (ws) => {
         });
       }
 
-      // 5. SDOPPIAMENTO (Spazio)
       if (msg.t === 'split' && players[playerId] && players[playerId].alive) {
         const p = players[playerId];
         if (p.cells.length < 16) {
@@ -153,9 +142,7 @@ wss.on('connection', (ws) => {
               newCells.push({
                 x: c.x + Math.cos(angle) * 20,
                 y: c.y + Math.sin(angle) * 20,
-                mass: halfMass,
-                vx: Math.cos(angle) * 15,
-                vy: Math.sin(angle) * 15
+                mass: halfMass
               });
             }
           });
@@ -175,9 +162,7 @@ wss.on('connection', (ws) => {
   });
 });
 
-// Game Loop Server (30 Tick/Sec)
 setInterval(() => {
-  // Fisiche per la massa espulsa
   ejectedMass.forEach((e) => {
     e.x += e.vx;
     e.y += e.vy;
@@ -187,7 +172,6 @@ setInterval(() => {
     e.y = Math.max(10, Math.min(WORLD_SIZE - 10, e.y));
   });
 
-  // Collisioni con il cibo
   Object.values(players).forEach((p) => {
     if (!p.alive) return;
     p.cells.forEach((c) => {
@@ -201,7 +185,6 @@ setInterval(() => {
         return true;
       });
 
-      // Mangia massa espulsa
       ejectedMass = ejectedMass.filter((e) => {
         const dist = Math.hypot(c.x - e.x, c.y - e.y);
         if (dist < r && c.mass > e.mass * 1.1) {
@@ -215,7 +198,6 @@ setInterval(() => {
 
   spawnFood();
 
-  // Invia stato aggiornato
   broadcast({
     t: 'state',
     players: Object.values(players),
@@ -225,5 +207,6 @@ setInterval(() => {
   });
 }, 1000 / 30);
 
+// Legge la porta dinamica assegnata da Render.com
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => console.log(`Server attivo sulla porta ${PORT}`));
