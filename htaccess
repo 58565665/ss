@@ -1,12 +1,1 @@
-<IfModule mod_rewrite.c>
-RewriteEngine On
 
-# Abilita il proxy per le connessioni WebSocket (WSS -> WS)
-RewriteCond %{HTTP:Upgrade} websocket [NC]
-RewriteCond %{HTTP:Connection} upgrade [NC]
-RewriteRule ^ws/?(.*) ws://127.0.0.1:8080/$1 [P,L]
-
-# Fallback proxy per richieste HTTP standard sulla stessa route
-RewriteCond %{REQUEST_URI} ^/ws/
-RewriteRule ^ws/?(.*) http://127.0.0.1:8080/$1 [P,L]
-</IfModule>
