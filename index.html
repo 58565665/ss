@@ -31,7 +31,6 @@
   #leaderboard li { margin: 4px 0; color: #aaa; }
   #leaderboard li.me { color: #ffd54d; font-weight: bold; }
 
-  /* Chat System */
   #chatContainer {
     position: fixed; bottom: 20px; left: 15px;
     width: 320px; height: 210px;
@@ -64,7 +63,6 @@
     box-shadow: 0 0 10px rgba(0, 243, 255, 0.5); 
   }
 
-  /* User Menu Panel */
   #joinBox {
     position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
     background: rgba(5, 5, 8, 0.85); backdrop-filter: blur(6px); z-index: 20;
@@ -102,7 +100,6 @@
   <input id="chatInput" placeholder="Press ENTER to chat..." maxlength="100" />
 </div>
 
-<!-- User Menu -->
 <div id="joinBox">
   <div class="panel">
     <div class="logo">ZERO THE LEGEND</div>
@@ -176,7 +173,10 @@ joinBtn.onclick = () => {
 };
 
 function connect(name, color, skin) {
-  ws = new WebSocket("ws://" + location.hostname + ":8080");
+  // FIX: Rileva automaticamente se usare ws:// o wss:// in base al protocollo della pagina
+  const wsProtocol = window.location.protocol === "https:" ? "wss://" : "ws://";
+  ws = new WebSocket(wsProtocol + location.hostname + ":8080");
+  
   ws.onopen = () => {
     ws.send(JSON.stringify({ t: "join", name, color, skin }));
     addChatMessage("System", "Connected to server.", true);
@@ -212,7 +212,6 @@ canvas.addEventListener("mousemove", (e) => {
 });
 
 window.addEventListener("keydown", (e) => {
-  // Invio e focus sulla chat
   if (document.activeElement === chatInput) {
     if (e.code === "Enter") {
       const text = chatInput.value.trim();
@@ -234,7 +233,6 @@ window.addEventListener("keydown", (e) => {
     return;
   }
 
-  // Controlli di gioco Agar.io
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
   if (e.code === "Space") {
     ws.send(JSON.stringify({ t: "split", dx: mouse.x, dy: mouse.y }));
@@ -323,12 +321,10 @@ function render() {
 
   drawGrid(camX, camY);
 
-  // Mappa
   ctx.strokeStyle = "#00f3ff";
   ctx.lineWidth = 3;
   ctx.strokeRect(0, 0, worldSize, worldSize);
 
-  // Cibo
   for (const f of latestState.food) {
     ctx.fillStyle = f.color || "#39ff14";
     ctx.beginPath();
@@ -336,7 +332,6 @@ function render() {
     ctx.fill();
   }
 
-  // Massa Espulsa (W)
   if (latestState.ejectedMass) {
     for (const e of latestState.ejectedMass) {
       ctx.fillStyle = e.color || "#00f3ff";
@@ -346,7 +341,6 @@ function render() {
     }
   }
 
-  // Virus / Spine Agar.io
   if (latestState.viruses) {
     for (const v of latestState.viruses) {
       ctx.fillStyle = "#33ff33";
@@ -359,7 +353,6 @@ function render() {
     }
   }
 
-  // Giocatori
   for (const p of getInterpolatedPlayers()) {
     if (!p.alive) continue;
     const isMe = p.id === myId;
