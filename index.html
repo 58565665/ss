@@ -173,9 +173,12 @@ joinBtn.onclick = () => {
 };
 
 function connect(name, color, skin) {
-  // FIX: Rileva automaticamente se usare ws:// o wss:// in base al protocollo della pagina
   const wsProtocol = window.location.protocol === "https:" ? "wss://" : "ws://";
-  ws = new WebSocket(wsProtocol + location.hostname + ":8080");
+  
+  // Se la route /ws su Nginx/Apache non fa da proxy, usiamo direttamente la porta 8080 o la relativa configurazione
+  const wsUrl = wsProtocol + location.hostname + (location.port ? ":" + location.port : ":8080");
+  
+  ws = new WebSocket(wsUrl);
   
   ws.onopen = () => {
     ws.send(JSON.stringify({ t: "join", name, color, skin }));
@@ -199,6 +202,9 @@ function connect(name, color, skin) {
     } else if (msg.t === "chat") {
       addChatMessage(msg.name, msg.msg);
     }
+  };
+  ws.onerror = (err) => {
+    addChatMessage("System", "WebSocket connection error. Check server status.", true);
   };
   ws.onclose = () => {
     addChatMessage("System", "Disconnected from server.", true);
