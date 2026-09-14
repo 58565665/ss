@@ -1,256 +1,66 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="it">
 <head>
-    <meta charset="UTF-8">
-    <title>Zero The Legend</title>
-    <style>
-        body, html { margin: 0; padding: 0; overflow: hidden; background: #050508; font-family: sans-serif; }
-        canvas { display: block; }
-        
-        #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; background: rgba(0,0,0,0.8); z-index: 10; }
-        .panel { background: #111; border: 2px solid #00f3ff; border-radius: 10px; padding: 30px; width: 350px; text-align: center; box-shadow: 0 0 20px rgba(0, 243, 255, 0.3); color: white; }
-        .logo { font-size: 28px; font-weight: bold; color: #00f3ff; margin-bottom: 20px; text-shadow: 0 0 10px #00f3ff; }
-        
-        input { width: 90%; padding: 10px; margin: 10px 0; background: #000; border: 1px solid #555; color: white; border-radius: 5px; outline: none; }
-        input:focus { border-color: #00f3ff; }
-        input[type="color"] { height: 40px; padding: 2px; cursor: pointer; }
-        
-        button { width: 100%; padding: 10px; margin: 5px 0; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 16px; transition: 0.2s; }
-        #loginBtn { background: #ffd54d; color: black; }
-        #registerBtn { background: #39ff14; color: black; }
-        #playBtn { background: #00f3ff; color: black; margin-top: 15px; font-size: 20px; padding: 15px; }
-        button:hover { filter: brightness(1.2); }
-        
-        #authMessage { font-size: 14px; min-height: 20px; margin: 10px 0; }
-        #loggedInInfo { display: none; margin-bottom: 20px; border: 1px solid #39ff14; padding: 10px; border-radius: 5px; background: rgba(57, 255, 20, 0.1); }
-        #logoutBtn { background: transparent; border: 1px solid #ff3333; color: #ff3333; padding: 5px; margin-top: 10px; font-size: 12px; }
-        
-        #hud { position: absolute; top: 10px; left: 10px; color: white; z-index: 5; font-size: 20px; text-shadow: 1px 1px 2px black; display: none; }
-    </style>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ZeroLegend Portal</title>
+<link rel="stylesheet" href="/portal.css">
+<style>
+#portalOverlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;background:radial-gradient(circle at 20% 10%,rgba(67,228,255,.14),transparent 32%),radial-gradient(circle at 80% 80%,rgba(157,108,255,.14),transparent 35%),rgba(3,7,18,.96);backdrop-filter:blur(14px)}
+.portal-box{width:min(470px,94vw);padding:28px;border:1px solid rgba(67,228,255,.25);border-radius:24px;background:rgba(10,17,29,.94);box-shadow:0 30px 90px rgba(0,0,0,.55)}
+.portal-logo{font-size:34px;font-weight:950;text-align:center;margin-bottom:5px}.portal-sub{text-align:center;color:#91a4bd;margin-bottom:22px}.portal-tabs{display:flex;gap:8px;margin-bottom:15px}.portal-tab{flex:1;padding:11px;border-radius:11px;border:1px solid rgba(135,180,255,.18);background:#0d1727;color:#9fb1c8;font-weight:800;cursor:pointer}.portal-tab.active{background:linear-gradient(90deg,#13d9bd,#43cfff);color:#03121a}.portal-form{display:grid;gap:10px}.portal-form label{font-size:12px;color:#9fb1c8}.portal-form input{width:100%;margin-top:5px;padding:12px;border-radius:11px;border:1px solid rgba(135,180,255,.18);background:#07101d;color:#fff;outline:none}.portal-form input:focus{border-color:#43e4ff}.portal-btn{border:0;border-radius:11px;padding:12px;background:linear-gradient(90deg,#13d9bd,#43cfff);color:#03121a;font-weight:900;cursor:pointer}.portal-msg{font-size:12px;min-height:18px}.portal-msg.error{color:#ff7b8f}.portal-msg.success{color:#37e28a}.portal-links{display:flex;justify-content:center;gap:16px;margin-top:15px}.portal-links a{color:#43e4ff;text-decoration:none;font-size:12px}
+.dashboard{display:none}.authenticated .dashboard{display:block}
+</style>
 </head>
 <body>
+<div class="grid"></div><div class="bg-orb orb-a"></div><div class="bg-orb orb-b"></div>
 
-    <div id="hud">Massa: <span id="massDisplay">20</span></div>
-    <canvas id="gameCanvas"></canvas>
+<header class="topbar">
+  <a class="brand" href="/">⚡ ZeroLegend</a>
+  <nav>
+    <a href="/games/">🎮 Giochi</a><a href="/profile.html">👤 Profilo</a><a href="/shop.html">🛒 Shop</a><a href="/leaderboard.html">🏆 Classifica</a>
+    <button id="logoutBtn" class="ghost-btn" type="button">Esci</button>
+  </nav>
+</header>
 
-    <div id="ui">
-        <div class="panel">
-            <div class="logo">ZERO THE LEGEND</div>
-            
-            <!-- Info Utente (Nascosto se non loggato) -->
-            <div id="loggedInInfo">
-                Connesso come: <b id="dispName" style="color:#39ff14"></b><br>
-                Livello <span id="dispLevel"></span> | Best: <span id="dispBest"></span>
-                <button id="logoutBtn">Logout</button>
-            </div>
+<main>
+<section class="hero glass">
+  <div><div class="eyebrow">MULTIPLAYER GAMING PORTAL</div><h1>Benvenuto in <span>ZeroLegend</span></h1><p>Un portale unico per account, ZeroCoins, statistiche, classifiche e tutti i giochi ZeroLegend.</p>
+    <div class="hero-actions"><a class="primary-btn" href="/games/">🎮 Apri Giochi</a><a class="secondary-btn" href="/shop.html">🛒 ZeroShop</a></div></div>
+  <div class="hero-stats"><div><strong id="heroLevel">—</strong><span>Livello</span></div><div><strong id="heroCoins">—</strong><span>ZeroCoins</span></div><div><strong id="heroGames">—</strong><span>Partite</span></div></div>
+</section>
 
-            <!-- Form Login/Register (Nascosto se loggato) -->
-            <div id="authForms">
-                <input type="text" id="username" placeholder="Username" autocomplete="off">
-                <input type="password" id="password" placeholder="Password">
-                <div style="display: flex; gap: 10px;">
-                    <button id="loginBtn">Login</button>
-                    <button id="registerBtn">Registrati</button>
-                </div>
-                <div id="authMessage"></div>
-                <hr style="border-color: #333; margin: 15px 0;">
-            </div>
+<div class="dashboard">
+<section class="section"><div class="section-head"><div><div class="eyebrow">IL TUO ACCOUNT</div><h2>Profilo</h2></div><a class="secondary-btn" href="/profile.html">Apri profilo</a></div>
+<div class="profile-grid"><div class="profile-main glass"><div id="avatar" class="avatar">Z</div><div><h3 id="profileName">Giocatore</h3><div id="profileEmail" class="muted">—</div><div class="xp-line"><span id="levelText">Lv. 1</span><span id="xpText">0 XP</span></div><div class="xpbar"><i id="xpBar"></i></div></div></div><div class="stat-card glass"><b id="statCoins">0</b><span>Coins</span></div><div class="stat-card glass"><b id="statGames">0</b><span>Partite</span></div><div class="stat-card glass"><b id="statKills">0</b><span>Kill</span></div><div class="stat-card glass"><b id="statBestMass">0</b><span>Best Mass</span></div><div class="stat-card glass"><b id="statElo">0</b><span>ELO</span></div></div></section>
 
-            <input type="color" id="colorPicker" value="#00f3ff">
-            <button id="playBtn">GIOCA</button>
-        </div>
-    </div>
+<section class="section"><div class="section-head"><div><div class="eyebrow">PLAY</div><h2>Tutti i giochi</h2></div></div><div class="game-grid"><a class="game-card featured" href="/games/zerolegend/"><div class="game-icon">🟣</div><div><div class="tag">LIVE · MULTIPLAYER</div><h3>ZeroLegend Arena</h3><p>Arena .io con PvP, bot, split, feed, virus e abilità.</p></div><span class="play">▶</span></a></div></section>
 
-    <script>
-        // --- LOGICA AUTENTICAZIONE ---
-        const ui = document.getElementById('ui');
-        const authForms = document.getElementById('authForms');
-        const loggedInInfo = document.getElementById('loggedInInfo');
-        const msg = document.getElementById('authMessage');
-        
-        let currentUser = null;
+<section class="section"><div class="section-head"><div><div class="eyebrow">COMMUNITY</div><h2>Classifica</h2></div><a class="secondary-btn" href="/leaderboard.html">Vedi tutto</a></div><div id="leaderboard" class="leader glass"><div class="muted">Caricamento…</div></div></section>
+</div>
+</main>
+<div id="toast" class="toast"></div>
 
-        function checkAuth() {
-            const token = localStorage.getItem('zl_token');
-            const name = localStorage.getItem('zl_name');
-            if (token && name) {
-                currentUser = { token, name };
-                authForms.style.display = 'none';
-                loggedInInfo.style.display = 'block';
-                document.getElementById('dispName').innerText = name;
-                document.getElementById('dispLevel').innerText = localStorage.getItem('zl_level') || 1;
-                document.getElementById('dispBest').innerText = localStorage.getItem('zl_best') || 0;
-            } else {
-                authForms.style.display = 'block';
-                loggedInInfo.style.display = 'none';
-                currentUser = null;
-            }
-        }
-        checkAuth();
+<!-- Auth compatibility overlay: login/register stays available on first visit. -->
+<div id="portalOverlay">
+  <div class="portal-box">
+    <div class="portal-logo">⚡ ZeroLegend</div><div class="portal-sub">Il tuo portale gaming · account unico</div>
+    <div class="portal-tabs"><button type="button" class="portal-tab active" data-portal-tab="login">Accedi</button><button type="button" class="portal-tab" data-portal-tab="register">Registrati</button></div>
+    <form id="loginForm" class="portal-form" onsubmit="return false;"><label>Email<input id="loginEmail" type="email" autocomplete="email"></label><label>Password<input id="loginPass" type="password" autocomplete="current-password"></label><button class="portal-btn" type="button" id="overlayLogin">Accedi</button><div id="loginError" class="portal-msg error"></div></form>
+    <form id="registerForm" class="portal-form" style="display:none" onsubmit="return false;"><label>Email<input id="regEmail" type="email" autocomplete="email"></label><label>Nickname<input id="regName" type="text" maxlength="40"></label><label>Password<input id="regPass" type="password" autocomplete="new-password"></label><button class="portal-btn" type="button" id="overlayRegister">Crea account</button><div id="regError" class="portal-msg error"></div><div id="regSuccess" class="portal-msg success"></div></form>
+    <div class="portal-links"><a href="/login.html">Pagina login</a><a href="/register.html">Pagina registrazione</a></div>
+  </div>
+</div>
 
-        document.getElementById('registerBtn').onclick = async () => {
-            const user = document.getElementById('username').value;
-            const pass = document.getElementById('password').value;
-            if(!user || !pass) return msg.innerText = "Inserisci dati!";
-            
-            const res = await fetch('/api/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: user, password: pass })
-            });
-            const data = await res.json();
-            msg.style.color = res.ok ? "#39ff14" : "#ff3333";
-            msg.innerText = data.message || data.error;
-        };
-
-        document.getElementById('loginBtn').onclick = async () => {
-            const user = document.getElementById('username').value;
-            const pass = document.getElementById('password').value;
-            if(!user || !pass) return msg.innerText = "Inserisci dati!";
-            
-            const res = await fetch('/api/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: user, password: pass })
-            });
-            const data = await res.json();
-            
-            if (res.ok) {
-                localStorage.setItem('zl_token', data.token);
-                localStorage.setItem('zl_name', data.username);
-                localStorage.setItem('zl_level', data.level);
-                localStorage.setItem('zl_best', data.bestMass);
-                checkAuth();
-            } else {
-                msg.style.color = "#ff3333";
-                msg.innerText = data.error;
-            }
-        };
-
-        document.getElementById('logoutBtn').onclick = () => {
-            localStorage.clear();
-            checkAuth();
-        };
-
-
-        // --- LOGICA GIOCO ---
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        let ws;
-        let myId = null;
-        let gameState = { players: {}, foods: [] };
-        
-        let mouseX = 0, mouseY = 0;
-        let cameraX = 0, cameraY = 0;
-
-        function resize() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-        }
-        window.addEventListener('resize', resize);
-        resize();
-
-        document.getElementById('playBtn').onclick = () => {
-            ui.style.display = 'none';
-            document.getElementById('hud').style.display = 'block';
-            
-            const name = currentUser ? currentUser.name : "Guest_" + Math.floor(Math.random()*100);
-            const color = document.getElementById('colorPicker').value;
-
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
-                // Modifica qui in basso con il tuo IP o Dominio se lo pubblichi online
-                ws = new WebSocket('ws://' + window.location.host); 
-                
-                ws.onopen = () => {
-                    ws.send(JSON.stringify({ t: 'join', name, color }));
-                };
-
-                ws.onmessage = (e) => {
-                    const data = JSON.parse(e.data);
-                    if (data.t === 'init') myId = data.id;
-                    if (data.t === 'update') gameState = data;
-                };
-
-                ws.onclose = () => {
-                    alert("Disconnesso dal server.");
-                    window.location.reload();
-                };
-            } else {
-                ws.send(JSON.stringify({ t: 'respawn', name, color }));
-            }
-        };
-
-        window.addEventListener('mousemove', (e) => {
-            if (!myId || !gameState.players[myId]) return;
-            // Calcola la posizione globale del mouse sommando la camera
-            const targetX = e.clientX - canvas.width / 2 + cameraX;
-            const targetY = e.clientY - canvas.height / 2 + cameraY;
-            
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ t: 'mouse', x: targetX, y: targetY }));
-            }
-        });
-
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            let me = gameState.players[myId];
-            if (me) {
-                // Aggiorna camera e HUD
-                cameraX = me.x;
-                cameraY = me.y;
-                document.getElementById('massDisplay').innerText = Math.floor(me.r);
-            }
-
-            ctx.save();
-            // Trasla il mondo rispetto al giocatore (Camera)
-            ctx.translate(canvas.width / 2 - cameraX, canvas.height / 2 - cameraY);
-
-            // Disegna griglia di sfondo
-            ctx.strokeStyle = "rgba(0, 243, 255, 0.1)";
-            for(let x = 0; x < 3000; x += 50) {
-                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 3000); ctx.stroke();
-            }
-            for(let y = 0; y < 3000; y += 50) {
-                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(3000, y); ctx.stroke();
-            }
-            
-            // Bordi mappa
-            ctx.strokeStyle = "red";
-            ctx.strokeRect(0, 0, 3000, 3000);
-
-            // Disegna Cibo
-            gameState.foods.forEach(f => {
-                ctx.fillStyle = f.color;
-                ctx.beginPath();
-                ctx.arc(f.x, f.y, 5, 0, Math.PI * 2);
-                ctx.fill();
-            });
-
-            // Disegna Giocatori
-            Object.values(gameState.players).forEach(p => {
-                ctx.fillStyle = p.color;
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-                ctx.fill();
-                
-                // Bordo neon
-                ctx.lineWidth = 3;
-                ctx.strokeStyle = "rgba(255,255,255,0.3)";
-                ctx.stroke();
-
-                // Nome
-                ctx.fillStyle = "white";
-                ctx.font = "bold 14px sans-serif";
-                ctx.textAlign = "center";
-                ctx.fillText(p.name, p.x, p.y + 5);
-            });
-
-            ctx.restore();
-            requestAnimationFrame(draw);
-        }
-        
-        draw();
-    </script>
-</body>
-</html>
+<script src="/game-config.js"></script><script src="/auth.js"></script><script src="/portal.js"></script>
+<script>
+(function(){
+  const overlay=document.getElementById('portalOverlay');
+  function tab(t){const login=t==='login';document.getElementById('loginForm').style.display=login?'grid':'none';document.getElementById('registerForm').style.display=login?'none':'grid';document.querySelectorAll('[data-portal-tab]').forEach(x=>x.classList.toggle('active',x.dataset.portalTab===t));}
+  document.querySelectorAll('[data-portal-tab]').forEach(x=>x.onclick=()=>tab(x.dataset.portalTab));
+  document.getElementById('overlayLogin').onclick=()=>document.getElementById('loginForm').requestSubmit();
+  document.getElementById('overlayRegister').onclick=()=>document.getElementById('registerForm').requestSubmit();
+  window.addEventListener('auth-changed',()=>{const ok=!!window.ZLAuth?.getToken?.(); if(ok){overlay.style.display='none';document.body.classList.add('authenticated')}else{overlay.style.display='flex';document.body.classList.remove('authenticated')}});
+  document.addEventListener('DOMContentLoaded',()=>{setTimeout(()=>{if(window.ZLAuth?.getToken?.()){overlay.style.display='none';document.body.classList.add('authenticated')}},250)});
+})();
+</script>
+</body></html>
