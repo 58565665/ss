@@ -1,13 +1,16 @@
 {
-  "name": "zerothelegend-game-backend",
-  "version": "2.0.0",
-  "description": "Multiplayer Game Server for Zero The Legend Mod",
+  "name": "zero-the-legend",
+  "version": "1.0.0",
+  "description": "Browser game con login",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "ws": "^8.17.0"
+    "bcryptjs": "^2.4.3",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.0.0",
+    "ws": "^8.14.2"
   }
 }
