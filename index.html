@@ -1,66 +1,415 @@
-<!doctype html>
-<html lang="it">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ZeroLegend Portal</title>
-<link rel="stylesheet" href="/portal.css">
+<meta charset="UTF-8" />
+<title>Zero The Legend Mod</title>
 <style>
-#portalOverlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;background:radial-gradient(circle at 20% 10%,rgba(67,228,255,.14),transparent 32%),radial-gradient(circle at 80% 80%,rgba(157,108,255,.14),transparent 35%),rgba(3,7,18,.96);backdrop-filter:blur(14px)}
-.portal-box{width:min(470px,94vw);padding:28px;border:1px solid rgba(67,228,255,.25);border-radius:24px;background:rgba(10,17,29,.94);box-shadow:0 30px 90px rgba(0,0,0,.55)}
-.portal-logo{font-size:34px;font-weight:950;text-align:center;margin-bottom:5px}.portal-sub{text-align:center;color:#91a4bd;margin-bottom:22px}.portal-tabs{display:flex;gap:8px;margin-bottom:15px}.portal-tab{flex:1;padding:11px;border-radius:11px;border:1px solid rgba(135,180,255,.18);background:#0d1727;color:#9fb1c8;font-weight:800;cursor:pointer}.portal-tab.active{background:linear-gradient(90deg,#13d9bd,#43cfff);color:#03121a}.portal-form{display:grid;gap:10px}.portal-form label{font-size:12px;color:#9fb1c8}.portal-form input{width:100%;margin-top:5px;padding:12px;border-radius:11px;border:1px solid rgba(135,180,255,.18);background:#07101d;color:#fff;outline:none}.portal-form input:focus{border-color:#43e4ff}.portal-btn{border:0;border-radius:11px;padding:12px;background:linear-gradient(90deg,#13d9bd,#43cfff);color:#03121a;font-weight:900;cursor:pointer}.portal-msg{font-size:12px;min-height:18px}.portal-msg.error{color:#ff7b8f}.portal-msg.success{color:#37e28a}.portal-links{display:flex;justify-content:center;gap:16px;margin-top:15px}.portal-links a{color:#43e4ff;text-decoration:none;font-size:12px}
-.dashboard{display:none}.authenticated .dashboard{display:block}
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #050508; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+  canvas { display: block; }
+  
+  #hud {
+    position: fixed; top: 15px; left: 15px;
+    color: #00f3ff; font: 14px monospace; 
+    background: rgba(5, 5, 8, 0.85);
+    padding: 10px 14px; border: 1px solid #00f3ff;
+    border-radius: 4px; box-shadow: 0 0 10px rgba(0, 243, 255, 0.2);
+    pointer-events: none; z-index: 10;
+  }
+
+  #leaderboard {
+    position: fixed; top: 15px; right: 15px;
+    color: #fff; font: 13px monospace;
+    background: rgba(5, 5, 8, 0.85);
+    padding: 12px 16px; border: 1px solid rgba(0, 243, 255, 0.4);
+    border-radius: 4px; min-width: 190px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    pointer-events: none; z-index: 10;
+  }
+  #leaderboard h3 { margin: 0 0 8px 0; font-size: 14px; text-transform: uppercase; color: #00f3ff; border-bottom: 1px solid #00f3ff; padding-bottom: 4px; }
+  #leaderboard ol { margin: 0; padding-left: 20px; }
+  #leaderboard li { margin: 4px 0; color: #aaa; }
+  #leaderboard li.me { color: #ffd54d; font-weight: bold; }
+
+  #chatContainer {
+    position: fixed; bottom: 20px; left: 15px;
+    width: 320px; height: 210px;
+    display: flex; flex-direction: column;
+    z-index: 15; pointer-events: none;
+  }
+  #chatMessages {
+    flex: 1; overflow-y: auto;
+    background: rgba(5, 5, 8, 0.6); border-radius: 4px;
+    padding: 8px; margin-bottom: 8px;
+    font-size: 13px; color: #fff; text-shadow: 1px 1px 2px #000;
+    pointer-events: auto;
+    border: 1px solid rgba(0, 243, 255, 0.2);
+  }
+  #chatMessages::-webkit-scrollbar { width: 6px; }
+  #chatMessages::-webkit-scrollbar-thumb { background: #00f3ff; border-radius: 4px; }
+  #chatMessages p { margin: 3px 0; word-wrap: break-word; }
+  #chatMessages .sender { color: #00f3ff; font-weight: bold; }
+  #chatMessages .server-msg { color: #ffd54d; font-style: italic; }
+  
+  #chatInput {
+    pointer-events: auto;
+    background: rgba(5, 5, 8, 0.85); border: 1px solid rgba(0, 243, 255, 0.5);
+    color: #fff; font-family: monospace; padding: 8px 10px;
+    border-radius: 4px; outline: none; transition: 0.2s;
+  }
+  #chatInput::placeholder { color: rgba(0, 243, 255, 0.5); }
+  #chatInput:focus { 
+    background: #0a0e17; border: 1px solid #00f3ff; 
+    box-shadow: 0 0 10px rgba(0, 243, 255, 0.5); 
+  }
+
+  #joinBox {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(5, 5, 8, 0.85); backdrop-filter: blur(6px); z-index: 20;
+  }
+  #joinBox .panel {
+    background: #0a0e17; border: 1px solid #00f3ff; padding: 25px; border-radius: 8px;
+    box-shadow: 0 0 25px rgba(0, 243, 255, 0.3); text-align: center; width: 320px;
+  }
+  #joinBox .logo { color: #00f3ff; font-size: 22px; font-weight: bold; margin-bottom: 15px; font-family: monospace; text-shadow: 0 0 10px #00f3ff; }
+  .field-group { text-align: left; margin-bottom: 12px; }
+  .field-group label { display: block; color: #888; font-size: 12px; margin-bottom: 4px; }
+  #joinBox input[type="text"], #joinBox input[type="color"] {
+    font-size: 14px; padding: 8px 12px; display: block; width: 100%;
+    background: #050508; border: 1px solid #00f3ff; color: #fff; border-radius: 4px; outline: none;
+  }
+  #joinBox input[type="color"] { height: 38px; cursor: pointer; padding: 2px; }
+  #joinBox button {
+    font-size: 16px; padding: 10px; width: 100%; margin-top: 10px;
+    background: #00f3ff; border: none; color: #050508; font-weight: bold;
+    border-radius: 4px; cursor: pointer; transition: 0.2s;
+  }
+  #joinBox button:hover { background: #33f6ff; box-shadow: 0 0 12px #00f3ff; }
 </style>
 </head>
 <body>
-<div class="grid"></div><div class="bg-orb orb-a"></div><div class="bg-orb orb-b"></div>
+<div id="hud">Mass: 0 | Players: 0</div>
 
-<header class="topbar">
-  <a class="brand" href="/">⚡ ZeroLegend</a>
-  <nav>
-    <a href="/games/">🎮 Giochi</a><a href="/profile.html">👤 Profilo</a><a href="/shop.html">🛒 Shop</a><a href="/leaderboard.html">🏆 Classifica</a>
-    <button id="logoutBtn" class="ghost-btn" type="button">Esci</button>
-  </nav>
-</header>
-
-<main>
-<section class="hero glass">
-  <div><div class="eyebrow">MULTIPLAYER GAMING PORTAL</div><h1>Benvenuto in <span>ZeroLegend</span></h1><p>Un portale unico per account, ZeroCoins, statistiche, classifiche e tutti i giochi ZeroLegend.</p>
-    <div class="hero-actions"><a class="primary-btn" href="/games/">🎮 Apri Giochi</a><a class="secondary-btn" href="/shop.html">🛒 ZeroShop</a></div></div>
-  <div class="hero-stats"><div><strong id="heroLevel">—</strong><span>Livello</span></div><div><strong id="heroCoins">—</strong><span>ZeroCoins</span></div><div><strong id="heroGames">—</strong><span>Partite</span></div></div>
-</section>
-
-<div class="dashboard">
-<section class="section"><div class="section-head"><div><div class="eyebrow">IL TUO ACCOUNT</div><h2>Profilo</h2></div><a class="secondary-btn" href="/profile.html">Apri profilo</a></div>
-<div class="profile-grid"><div class="profile-main glass"><div id="avatar" class="avatar">Z</div><div><h3 id="profileName">Giocatore</h3><div id="profileEmail" class="muted">—</div><div class="xp-line"><span id="levelText">Lv. 1</span><span id="xpText">0 XP</span></div><div class="xpbar"><i id="xpBar"></i></div></div></div><div class="stat-card glass"><b id="statCoins">0</b><span>Coins</span></div><div class="stat-card glass"><b id="statGames">0</b><span>Partite</span></div><div class="stat-card glass"><b id="statKills">0</b><span>Kill</span></div><div class="stat-card glass"><b id="statBestMass">0</b><span>Best Mass</span></div><div class="stat-card glass"><b id="statElo">0</b><span>ELO</span></div></div></section>
-
-<section class="section"><div class="section-head"><div><div class="eyebrow">PLAY</div><h2>Tutti i giochi</h2></div></div><div class="game-grid"><a class="game-card featured" href="/games/zerolegend/"><div class="game-icon">🟣</div><div><div class="tag">LIVE · MULTIPLAYER</div><h3>ZeroLegend Arena</h3><p>Arena .io con PvP, bot, split, feed, virus e abilità.</p></div><span class="play">▶</span></a></div></section>
-
-<section class="section"><div class="section-head"><div><div class="eyebrow">COMMUNITY</div><h2>Classifica</h2></div><a class="secondary-btn" href="/leaderboard.html">Vedi tutto</a></div><div id="leaderboard" class="leader glass"><div class="muted">Caricamento…</div></div></section>
+<div id="leaderboard">
+  <h3>Leaderboard</h3>
+  <ol id="lbList"></ol>
 </div>
-</main>
-<div id="toast" class="toast"></div>
 
-<!-- Auth compatibility overlay: login/register stays available on first visit. -->
-<div id="portalOverlay">
-  <div class="portal-box">
-    <div class="portal-logo">⚡ ZeroLegend</div><div class="portal-sub">Il tuo portale gaming · account unico</div>
-    <div class="portal-tabs"><button type="button" class="portal-tab active" data-portal-tab="login">Accedi</button><button type="button" class="portal-tab" data-portal-tab="register">Registrati</button></div>
-    <form id="loginForm" class="portal-form" onsubmit="return false;"><label>Email<input id="loginEmail" type="email" autocomplete="email"></label><label>Password<input id="loginPass" type="password" autocomplete="current-password"></label><button class="portal-btn" type="button" id="overlayLogin">Accedi</button><div id="loginError" class="portal-msg error"></div></form>
-    <form id="registerForm" class="portal-form" style="display:none" onsubmit="return false;"><label>Email<input id="regEmail" type="email" autocomplete="email"></label><label>Nickname<input id="regName" type="text" maxlength="40"></label><label>Password<input id="regPass" type="password" autocomplete="new-password"></label><button class="portal-btn" type="button" id="overlayRegister">Crea account</button><div id="regError" class="portal-msg error"></div><div id="regSuccess" class="portal-msg success"></div></form>
-    <div class="portal-links"><a href="/login.html">Pagina login</a><a href="/register.html">Pagina registrazione</a></div>
+<div id="chatContainer">
+  <div id="chatMessages"></div>
+  <input id="chatInput" placeholder="Press ENTER to chat..." maxlength="100" />
+</div>
+
+<div id="joinBox">
+  <div class="panel">
+    <div class="logo">ZERO THE LEGEND</div>
+    <div class="field-group">
+      <label>Player Name</label>
+      <input id="nameInput" placeholder="Your name" maxlength="16" value="ZeroPlayer" />
+    </div>
+    <div class="field-group">
+      <label>Cell Color</label>
+      <input id="colorInput" type="color" value="#00f3ff" />
+    </div>
+    <div class="field-group">
+      <label>Skin URL (Optional)</label>
+      <input id="skinInput" placeholder="https://..." />
+    </div>
+    <button id="joinBtn">PLAY</button>
   </div>
 </div>
 
-<script src="/game-config.js"></script><script src="/auth.js"></script><script src="/portal.js"></script>
+<canvas id="c"></canvas>
+
 <script>
-(function(){
-  const overlay=document.getElementById('portalOverlay');
-  function tab(t){const login=t==='login';document.getElementById('loginForm').style.display=login?'grid':'none';document.getElementById('registerForm').style.display=login?'none':'grid';document.querySelectorAll('[data-portal-tab]').forEach(x=>x.classList.toggle('active',x.dataset.portalTab===t));}
-  document.querySelectorAll('[data-portal-tab]').forEach(x=>x.onclick=()=>tab(x.dataset.portalTab));
-  document.getElementById('overlayLogin').onclick=()=>document.getElementById('loginForm').requestSubmit();
-  document.getElementById('overlayRegister').onclick=()=>document.getElementById('registerForm').requestSubmit();
-  window.addEventListener('auth-changed',()=>{const ok=!!window.ZLAuth?.getToken?.(); if(ok){overlay.style.display='none';document.body.classList.add('authenticated')}else{overlay.style.display='flex';document.body.classList.remove('authenticated')}});
-  document.addEventListener('DOMContentLoaded',()=>{setTimeout(()=>{if(window.ZLAuth?.getToken?.()){overlay.style.display='none';document.body.classList.add('authenticated')}},250)});
-})();
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+function resize() { canvas.width = innerWidth; canvas.height = innerHeight; }
+resize();
+window.addEventListener("resize", resize);
+
+let ws = null;
+let myId = null;
+let worldSize = 4000;
+let latestState = { players: [], food: [], viruses: [], ejectedMass: [] };
+
+let prevState = null;
+let stateReceivedAt = 0;
+const SERVER_TICK_MS = 1000 / 30;
+
+const joinBox = document.getElementById("joinBox");
+const joinBtn = document.getElementById("joinBtn");
+const nameInput = document.getElementById("nameInput");
+const colorInput = document.getElementById("colorInput");
+const skinInput = document.getElementById("skinInput");
+
+const chatMessages = document.getElementById("chatMessages");
+const chatInput = document.getElementById("chatInput");
+
+function addChatMessage(sender, text, isServer = false) {
+  const p = document.createElement("p");
+  if (isServer) {
+    p.classList.add("server-msg");
+    p.textContent = text;
+  } else {
+    p.innerHTML = `<span class="sender">${sender}:</span> ${text}`;
+  }
+  chatMessages.appendChild(p);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+joinBtn.onclick = () => {
+  const name = nameInput.value.trim() || "Player";
+  const color = colorInput.value;
+  const skin = skinInput.value.trim();
+
+  joinBtn.textContent = "Connecting...";
+  
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    connect(name, color, skin);
+  } else {
+    ws.send(JSON.stringify({ t: "respawn", name, color, skin }));
+    joinBox.style.display = "none";
+    canvas.focus();
+  }
+};
+
+function connect(name, color, skin) {
+  // Puntiamo direttamente all'URL del backend su Render tramite WebSocket Sicuro (WSS)
+  const wsUrl = "wss://ss-aw6z.onrender.com";
+  
+  try {
+    ws = new WebSocket(wsUrl);
+  } catch (e) {
+    addChatMessage("System", "Impossibile creare il WebSocket.", true);
+    joinBtn.textContent = "PLAY";
+    return;
+  }
+  
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ t: "join", name, color, skin }));
+    addChatMessage("System", "Connected to server.", true);
+    joinBox.style.display = "none";
+    canvas.focus();
+  };
+  
+  ws.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+    if (msg.t === "welcome") {
+      myId = msg.id;
+      worldSize = msg.worldSize;
+    } else if (msg.t === "state") {
+      prevState = latestState;
+      latestState = msg;
+      stateReceivedAt = performance.now();
+      
+      const me = latestState.players.find((p) => p.id === myId);
+      if (me && !me.alive && joinBox.style.display === "none") {
+        joinBtn.textContent = "Respawn";
+        joinBox.style.display = "flex";
+      }
+    } else if (msg.t === "chat") {
+      addChatMessage(msg.name, msg.msg);
+    }
+  };
+  
+  ws.onerror = (err) => {
+    addChatMessage("System", "Errore di connessione. Il server Render è offline o in avvio (potrebbe richiedere 30 secondi).", true);
+    joinBox.style.display = "flex";
+    joinBtn.textContent = "Riprova";
+  };
+  
+  ws.onclose = () => {
+    addChatMessage("System", "Disconnected from server.", true);
+    joinBox.style.display = "flex";
+    joinBtn.textContent = "Riconnetti";
+  };
+}
+
+let mouse = { x: 0, y: 0 };
+canvas.addEventListener("mousemove", (e) => {
+  mouse.x = e.clientX - canvas.width / 2;
+  mouse.y = e.clientY - canvas.height / 2;
+});
+
+window.addEventListener("keydown", (e) => {
+  if (document.activeElement === chatInput) {
+    if (e.code === "Enter") {
+      const text = chatInput.value.trim();
+      if (text && ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ t: "chat", msg: text }));
+      }
+      chatInput.value = "";
+      chatInput.blur();
+    } else if (e.code === "Escape") {
+      chatInput.value = "";
+      chatInput.blur();
+    }
+    return;
+  }
+
+  if (e.code === "Enter") {
+    chatInput.focus();
+    e.preventDefault();
+    return;
+  }
+
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  if (e.code === "Space") {
+    ws.send(JSON.stringify({ t: "split", dx: mouse.x, dy: mouse.y }));
+  } else if (e.code === "KeyW") {
+    ws.send(JSON.stringify({ t: "eject", dx: mouse.x, dy: mouse.y }));
+  }
+});
+
+setInterval(() => {
+  if (ws && ws.readyState === WebSocket.OPEN && document.activeElement !== chatInput) {
+    ws.send(JSON.stringify({ t: "input", dx: mouse.x, dy: mouse.y }));
+  }
+}, 1000 / 20);
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function getInterpolatedPlayers() {
+  if (!prevState) return latestState.players;
+  const t = Math.min(1, (performance.now() - stateReceivedAt) / SERVER_TICK_MS);
+  return latestState.players.map((p) => {
+    const prev = prevState.players.find((pp) => pp.id === p.id);
+    if (!prev) return p;
+    return {
+      ...p,
+      cells: p.cells.map((c, i) => {
+        const pc = prev.cells[i];
+        if (!pc) return c;
+        return { ...c, x: lerp(pc.x, c.x, t), y: lerp(pc.y, c.y, t) };
+      }),
+    };
+  });
+}
+
+function drawGrid(camX, camY) {
+  const gridSize = 50;
+  ctx.strokeStyle = "rgba(0, 243, 255, 0.05)";
+  ctx.lineWidth = 1;
+
+  const startX = Math.max(0, Math.floor((camX - canvas.width / 2) / gridSize) * gridSize);
+  const endX = Math.min(worldSize, Math.ceil((camX + canvas.width / 2) / gridSize) * gridSize);
+  const startY = Math.max(0, Math.floor((camY - canvas.height / 2) / gridSize) * gridSize);
+  const endY = Math.min(worldSize, Math.ceil((camY + canvas.height / 2) / gridSize) * gridSize);
+
+  ctx.beginPath();
+  for (let x = startX; x <= endX; x += gridSize) {
+    ctx.moveTo(x, startY); ctx.lineTo(x, endY);
+  }
+  for (let y = startY; y <= endY; y += gridSize) {
+    ctx.moveTo(startX, y); ctx.lineTo(endX, y);
+  }
+  ctx.stroke();
+}
+
+function updateLeaderboard() {
+  const lbList = document.getElementById("lbList");
+  const sorted = [...latestState.players]
+    .filter(p => p.alive)
+    .map(p => ({
+      id: p.id,
+      name: p.name,
+      mass: p.cells.reduce((s, c) => s + c.mass, 0)
+    }))
+    .sort((a, b) => b.mass - a.mass)
+    .slice(0, 10);
+
+  lbList.innerHTML = "";
+  for (const p of sorted) {
+    const li = document.createElement("li");
+    li.textContent = `${p.name} - ${Math.round(p.mass)}`;
+    if (p.id === myId) li.classList.add("me");
+    lbList.appendChild(li);
+  }
+}
+
+function render() {
+  requestAnimationFrame(render);
+  ctx.fillStyle = "#050508";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const me = latestState.players.find((p) => p.id === myId);
+  const camX = me && me.cells[0] ? me.cells[0].x : worldSize / 2;
+  const camY = me && me.cells[0] ? me.cells[0].y : worldSize / 2;
+
+  ctx.save();
+  ctx.translate(canvas.width / 2 - camX, canvas.height / 2 - camY);
+
+  drawGrid(camX, camY);
+
+  ctx.strokeStyle = "#00f3ff";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(0, 0, worldSize, worldSize);
+
+  for (const f of latestState.food) {
+    ctx.fillStyle = f.color || "#39ff14";
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  if (latestState.ejectedMass) {
+    for (const e of latestState.ejectedMass) {
+      ctx.fillStyle = e.color || "#00f3ff";
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, Math.sqrt(e.mass) * 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  if (latestState.viruses) {
+    for (const v of latestState.viruses) {
+      ctx.fillStyle = "#33ff33";
+      ctx.strokeStyle = "#22aa22";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(v.x, v.y, Math.sqrt(v.mass) * 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+
+  for (const p of getInterpolatedPlayers()) {
+    if (!p.alive) continue;
+    const isMe = p.id === myId;
+    const baseColor = p.color || (isMe ? "#ffd54d" : "#00f3ff");
+
+    for (const c of p.cells) {
+      const radius = Math.sqrt(c.mass) * 4;
+      
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = baseColor;
+      ctx.fill();
+
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    const head = p.cells[0];
+    if (head) {
+      const headRadius = Math.sqrt(head.mass) * 4;
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 13px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(p.name, head.x, head.y - headRadius - 8);
+    }
+  }
+
+  ctx.restore();
+
+  const mass = me ? me.cells.reduce((s, c) => s + c.mass, 0) : 0;
+  document.getElementById("hud").textContent = `Mass: ${Math.round(mass)} | Players: ${latestState.players.filter(p => p.alive).length}`;
+  updateLeaderboard();
+}
+
+render();
 </script>
-</body></html>
+</body>
+</html>
