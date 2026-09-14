@@ -112,7 +112,7 @@
       <input id="colorInput" type="color" value="#00f3ff" />
     </div>
     <div class="field-group">
-      <label>Skin URL (Optional)</label>
+      <label>Skin URL (Optional, ex: i.imgur.com/...)</label>
       <input id="skinInput" placeholder="https://..." />
     </div>
     <button id="joinBtn">PLAY</button>
@@ -136,6 +136,9 @@ let latestState = { players: [], food: [], viruses: [], ejectedMass: [] };
 let prevState = null;
 let stateReceivedAt = 0;
 const SERVER_TICK_MS = 1000 / 30;
+
+// NUOVO: Cache per le skin caricate per evitare lag
+const loadedSkins = {};
 
 const joinBox = document.getElementById("joinBox");
 const joinBtn = document.getElementById("joinBtn");
@@ -163,7 +166,6 @@ joinBtn.onclick = () => {
   const color = colorInput.value;
   const skin = skinInput.value.trim();
 
-  // Cambia il testo per dare feedback visivo
   joinBtn.textContent = "Connecting...";
   
   if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -177,8 +179,6 @@ joinBtn.onclick = () => {
 
 function connect(name, color, skin) {
   const wsProtocol = window.location.protocol === "https:" ? "wss://" : "ws://";
-  
-  // Utilizza la path /ws per intercettare il proxy inverso invece di forzare la porta 8080 che Netsons blocca
   const wsUrl = wsProtocol + location.hostname + "/ws";
   
   try {
@@ -192,7 +192,6 @@ function connect(name, color, skin) {
   ws.onopen = () => {
     ws.send(JSON.stringify({ t: "join", name, color, skin }));
     addChatMessage("System", "Connected to server.", true);
-    // Nascondi il pannello solo a connessione confermata
     joinBox.style.display = "none";
     canvas.focus();
   };
@@ -218,8 +217,7 @@ function connect(name, color, skin) {
   };
   
   ws.onerror = (err) => {
-    addChatMessage("System", "Errore di connessione. Il server Node.js è offline o irraggiungibile.", true);
-    // Se fallisce, rimettiamo il pannello a schermo per non bloccarti
+    addChatMessage("System", "Errore di connessione.", true);
     joinBox.style.display = "flex";
     joinBtn.textContent = "Riprova";
   };
@@ -333,6 +331,50 @@ function updateLeaderboard() {
   }
 }
 
+// NUOVO: Disegno dei virus "spinosi"
+function drawVirus(x, y, radius) {
+    ctx.fillStyle = "#33ff33";
+    ctx.strokeStyle = "#22aa22";
+    ctx.lineWidth = 2;
+    
+    ctx.beginPath();
+    const spikes = 20;
+    for (let i = 0; i < spikes * 2; i++) {
+        const r = (i % 2 === 0) ? radius + 5 : radius - 2;
+        const a = (Math.PI / spikes) * i;
+        if (i === 0) ctx.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+        else ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+}
+
+// NUOVO: Disegno della minimappa
+function drawMinimap(camX, camY) {
+    const size = 150;
+    const padding = 20;
+    const startX = canvas.width - size - padding;
+    const startY = canvas.height - size - padding;
+    
+    // Sfondo Minimappa
+    ctx.fillStyle = "rgba(5, 5, 8, 0.8)";
+    ctx.strokeStyle = "rgba(0, 243, 255, 0.5)";
+    ctx.lineWidth = 1;
+    ctx.fillRect(startX, startY, size, size);
+    ctx.strokeRect(startX, startY, size, size);
+
+    const scale = size / worldSize;
+
+    // Disegna il giocatore
+    if (camX && camY) {
+        ctx.fillStyle = "#ffd54d";
+        ctx.beginPath();
+        ctx.arc(startX + (camX * scale), startY + (camY * scale), 4, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
 function render() {
   requestAnimationFrame(render);
   ctx.fillStyle = "#050508";
@@ -367,15 +409,10 @@ function render() {
     }
   }
 
+  // MODIFICATO: Richiama la nuova funzione drawVirus
   if (latestState.viruses) {
     for (const v of latestState.viruses) {
-      ctx.fillStyle = "#33ff33";
-      ctx.strokeStyle = "#22aa22";
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(v.x, v.y, Math.sqrt(v.mass) * 4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
+      drawVirus(v.x, v.y, Math.sqrt(v.mass) * 4);
     }
   }
 
@@ -387,14 +424,38 @@ function render() {
     for (const c of p.cells) {
       const radius = Math.sqrt(c.mass) * 4;
       
+      ctx.save(); // Salva lo stato prima di applicare la skin
       ctx.beginPath();
       ctx.arc(c.x, c.y, radius, 0, Math.PI * 2);
-      ctx.fillStyle = baseColor;
-      ctx.fill();
+      
+      // NUOVO: Gestione delle Skin
+      if (p.skin && p.skin.startsWith("http")) {
+          ctx.clip(); // Ritaglia a forma di cerchio
+          
+          if (!loadedSkins[p.skin]) {
+              const img = new Image();
+              img.crossOrigin = "anonymous"; // Importante per evitare errori CORS
+              img.src = p.skin;
+              loadedSkins[p.skin] = img;
+          }
+          
+          const skinImg = loadedSkins[p.skin];
+          if (skinImg.complete) {
+              ctx.drawImage(skinImg, c.x - radius, c.y - radius, radius * 2, radius * 2);
+          } else {
+             // Fallback mentre l'immagine carica
+             ctx.fillStyle = baseColor;
+             ctx.fill(); 
+          }
+      } else {
+          ctx.fillStyle = baseColor;
+          ctx.fill();
+      }
 
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 2;
       ctx.stroke();
+      ctx.restore(); // Ripristina per non influenzare altri disegni
     }
 
     const head = p.cells[0];
@@ -407,11 +468,15 @@ function render() {
     }
   }
 
-  ctx.restore();
+  ctx.restore(); // Fine traslazione telecamera
 
+  // UI disegnata "sopra" tutto il resto, ancorata allo schermo
   const mass = me ? me.cells.reduce((s, c) => s + c.mass, 0) : 0;
   document.getElementById("hud").textContent = `Mass: ${Math.round(mass)} | Players: ${latestState.players.filter(p => p.alive).length}`;
   updateLeaderboard();
+  
+  // NUOVO: Disegna la minimappa nell'angolo
+  drawMinimap(camX, camY);
 }
 
 render();
