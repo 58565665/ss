@@ -163,27 +163,40 @@ joinBtn.onclick = () => {
   const color = colorInput.value;
   const skin = skinInput.value.trim();
 
+  // Cambia il testo per dare feedback visivo
+  joinBtn.textContent = "Connecting...";
+  
   if (!ws || ws.readyState !== WebSocket.OPEN) {
     connect(name, color, skin);
   } else {
     ws.send(JSON.stringify({ t: "respawn", name, color, skin }));
+    joinBox.style.display = "none";
+    canvas.focus();
   }
-  joinBox.style.display = "none";
-  canvas.focus();
 };
 
 function connect(name, color, skin) {
   const wsProtocol = window.location.protocol === "https:" ? "wss://" : "ws://";
   
-  // Se la route /ws su Nginx/Apache non fa da proxy, usiamo direttamente la porta 8080 o la relativa configurazione
-  const wsUrl = wsProtocol + location.hostname + (location.port ? ":" + location.port : ":8080");
+  // Utilizza la path /ws per intercettare il proxy inverso invece di forzare la porta 8080 che Netsons blocca
+  const wsUrl = wsProtocol + location.hostname + "/ws";
   
-  ws = new WebSocket(wsUrl);
+  try {
+    ws = new WebSocket(wsUrl);
+  } catch (e) {
+    addChatMessage("System", "Impossibile creare il WebSocket.", true);
+    joinBtn.textContent = "PLAY";
+    return;
+  }
   
   ws.onopen = () => {
     ws.send(JSON.stringify({ t: "join", name, color, skin }));
     addChatMessage("System", "Connected to server.", true);
+    // Nascondi il pannello solo a connessione confermata
+    joinBox.style.display = "none";
+    canvas.focus();
   };
+  
   ws.onmessage = (ev) => {
     const msg = JSON.parse(ev.data);
     if (msg.t === "welcome") {
@@ -203,11 +216,18 @@ function connect(name, color, skin) {
       addChatMessage(msg.name, msg.msg);
     }
   };
+  
   ws.onerror = (err) => {
-    addChatMessage("System", "WebSocket connection error. Check server status.", true);
+    addChatMessage("System", "Errore di connessione. Il server Node.js è offline o irraggiungibile.", true);
+    // Se fallisce, rimettiamo il pannello a schermo per non bloccarti
+    joinBox.style.display = "flex";
+    joinBtn.textContent = "Riprova";
   };
+  
   ws.onclose = () => {
     addChatMessage("System", "Disconnected from server.", true);
+    joinBox.style.display = "flex";
+    joinBtn.textContent = "Riconnetti";
   };
 }
 
