@@ -10,6 +10,77 @@ const fs = require('fs');
 const path = require('path');
 const { WebSocketServer, WebSocket } = require('ws');
 
+// ===== POWER-UP: SPEED BOOST =====
+
+const POWERUP_CONFIG = {
+  type: 'speed',
+  radius: 12,
+  maxOnMap: 8,           // massimo power-up contemporanei
+  spawnIntervalMs: 15000, // ogni 15s prova a spawnarne uno
+  effectDurationMs: 6000, // 6 secondi di boost
+  speedMultiplier: 1.6,
+  color: '#00e5ff'
+};
+
+let powerUps = []; // { id, x, y, type }
+let powerUpIdCounter = 0;
+
+function spawnPowerUp(worldWidth, worldHeight) {
+  if (powerUps.length >= POWERUP_CONFIG.maxOnMap) return;
+
+  const powerUp = {
+    id: `pu_${++powerUpIdCounter}`,
+    x: Math.random() * worldWidth,
+    y: Math.random() * worldHeight,
+    type: POWERUP_CONFIG.type,
+    radius: POWERUP_CONFIG.radius
+  };
+  powerUps.push(powerUp);
+  broadcast({ type: 'powerUpSpawn', powerUp });
+}
+
+// Avvia lo spawn periodico (chiamalo una volta all'avvio server)
+function startPowerUpSpawner(worldWidth, worldHeight) {
+  setInterval(() => {
+    spawnPowerUp(worldWidth, worldHeight);
+  }, POWERUP_CONFIG.spawnIntervalMs);
+}
+
+// Da chiamare nel game loop, per ogni player vivo
+function checkPowerUpCollisions(player) {
+  for (let i = powerUps.length - 1; i >= 0; i--) {
+    const pu = powerUps[i];
+    const dx = player.x - pu.x;
+    const dy = player.y - pu.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist < player.radius + pu.radius) {
+      applyPowerUpEffect(player, pu.type);
+      powerUps.splice(i, 1);
+      broadcast({ type: 'powerUpCollected', id: pu.id, playerId: player.id });
+    }
+  }
+}
+
+function applyPowerUpEffect(player, type) {
+  if (type === 'speed') {
+    player.speedMultiplier = POWERUP_CONFIG.speedMultiplier;
+    player.speedBoostExpiresAt = Date.now() + POWERUP_CONFIG.effectDurationMs;
+  }
+}
+
+// Da chiamare nel game loop per ogni player, prima di calcolare il movimento
+function updatePowerUpEffects(player) {
+  if (player.speedBoostExpiresAt && Date.now() > player.speedBoostExpiresAt) {
+    player.speedMultiplier = 1;
+    player.speedBoostExpiresAt = null;
+  }
+}
+
+// Nel calcolo velocità del player, moltiplica per player.speedMultiplier || 1
+
+
+
 // Carica automaticamente backend/.env senza richiedere la dipendenza dotenv.
 // Le variabili già presenti nell'ambiente hanno priorità.
 function loadLocalEnv(file) {
