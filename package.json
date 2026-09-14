@@ -1,12 +1,16 @@
 {
-  "name": "zero-the-legend-backend",
-  "version": "1.0.0",
+  "name": "zerothelegend-game-backend",
+  "version": "2.0.0",
+  "description": "ZeroLegend multiplayer agar-like backend with WebSocket, bots and authenticated sessions",
+  "type": "commonjs",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node game-test.js && node feature-test.js"
   },
-  "dependencies": {
-    "express": "^4.19.2",
-    "ws": "^8.17.0"
-  }
+  "keywords": ["game", "multiplayer", "websocket", "agar", "zerothelegend"],
+  "license": "MIT",
+  "engines": { "node": ">=18" },
+  "dependencies": { "ws": "^8.18.0" }
 }
