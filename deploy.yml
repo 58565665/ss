@@ -3,7 +3,7 @@ name: Deploy to Netsons via FTP
 on:
   push:
     branches:
-      - main   # cambia se usi un altro branch, es. master
+      - main
 
 jobs:
   ftp-deploy:
@@ -20,10 +20,9 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./           # cartella locale da caricare
-          server-dir: /public_html/   # cartella di destinazione su Netsons
+          local-dir: ./public/          # cartella sorgente nel repo
+          server-dir: /public_html/     # cartella destinazione su Netsons
           exclude: |
             **/.git*
             **/.git*/**
             **/node_modules/**
-            **/README.md
