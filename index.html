@@ -1,485 +1,256 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="it">
 <head>
-<meta charset="UTF-8" />
-<title>Zero The Legend Mod</title>
-<style>
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; overflow: hidden; background: #050508; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-  canvas { display: block; }
-  
-  #hud {
-    position: fixed; top: 15px; left: 15px;
-    color: #00f3ff; font: 14px monospace; 
-    background: rgba(5, 5, 8, 0.85);
-    padding: 10px 14px; border: 1px solid #00f3ff;
-    border-radius: 4px; box-shadow: 0 0 10px rgba(0, 243, 255, 0.2);
-    pointer-events: none; z-index: 10;
-  }
-
-  #leaderboard {
-    position: fixed; top: 15px; right: 15px;
-    color: #fff; font: 13px monospace;
-    background: rgba(5, 5, 8, 0.85);
-    padding: 12px 16px; border: 1px solid rgba(0, 243, 255, 0.4);
-    border-radius: 4px; min-width: 190px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-    pointer-events: none; z-index: 10;
-  }
-  #leaderboard h3 { margin: 0 0 8px 0; font-size: 14px; text-transform: uppercase; color: #00f3ff; border-bottom: 1px solid #00f3ff; padding-bottom: 4px; }
-  #leaderboard ol { margin: 0; padding-left: 20px; }
-  #leaderboard li { margin: 4px 0; color: #aaa; }
-  #leaderboard li.me { color: #ffd54d; font-weight: bold; }
-
-  #chatContainer {
-    position: fixed; bottom: 20px; left: 15px;
-    width: 320px; height: 210px;
-    display: flex; flex-direction: column;
-    z-index: 15; pointer-events: none;
-  }
-  #chatMessages {
-    flex: 1; overflow-y: auto;
-    background: rgba(5, 5, 8, 0.6); border-radius: 4px;
-    padding: 8px; margin-bottom: 8px;
-    font-size: 13px; color: #fff; text-shadow: 1px 1px 2px #000;
-    pointer-events: auto;
-    border: 1px solid rgba(0, 243, 255, 0.2);
-  }
-  #chatMessages::-webkit-scrollbar { width: 6px; }
-  #chatMessages::-webkit-scrollbar-thumb { background: #00f3ff; border-radius: 4px; }
-  #chatMessages p { margin: 3px 0; word-wrap: break-word; }
-  #chatMessages .sender { color: #00f3ff; font-weight: bold; }
-  #chatMessages .server-msg { color: #ffd54d; font-style: italic; }
-  
-  #chatInput {
-    pointer-events: auto;
-    background: rgba(5, 5, 8, 0.85); border: 1px solid rgba(0, 243, 255, 0.5);
-    color: #fff; font-family: monospace; padding: 8px 10px;
-    border-radius: 4px; outline: none; transition: 0.2s;
-  }
-  #chatInput::placeholder { color: rgba(0, 243, 255, 0.5); }
-  #chatInput:focus { 
-    background: #0a0e17; border: 1px solid #00f3ff; 
-    box-shadow: 0 0 10px rgba(0, 243, 255, 0.5); 
-  }
-
-  #joinBox {
-    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
-    background: rgba(5, 5, 8, 0.85); backdrop-filter: blur(6px); z-index: 20;
-  }
-  #joinBox .panel {
-    background: #0a0e17; border: 1px solid #00f3ff; padding: 25px; border-radius: 8px;
-    box-shadow: 0 0 25px rgba(0, 243, 255, 0.3); text-align: center; width: 320px;
-  }
-  #joinBox .logo { color: #00f3ff; font-size: 22px; font-weight: bold; margin-bottom: 15px; font-family: monospace; text-shadow: 0 0 10px #00f3ff; }
-  .field-group { text-align: left; margin-bottom: 12px; }
-  .field-group label { display: block; color: #888; font-size: 12px; margin-bottom: 4px; }
-  #joinBox input[type="text"], #joinBox input[type="color"] {
-    font-size: 14px; padding: 8px 12px; display: block; width: 100%;
-    background: #050508; border: 1px solid #00f3ff; color: #fff; border-radius: 4px; outline: none;
-  }
-  #joinBox input[type="color"] { height: 38px; cursor: pointer; padding: 2px; }
-  #joinBox button {
-    font-size: 16px; padding: 10px; width: 100%; margin-top: 10px;
-    background: #00f3ff; border: none; color: #050508; font-weight: bold;
-    border-radius: 4px; cursor: pointer; transition: 0.2s;
-  }
-  #joinBox button:hover { background: #33f6ff; box-shadow: 0 0 12px #00f3ff; }
-</style>
+    <meta charset="UTF-8">
+    <title>Zero The Legend</title>
+    <style>
+        body, html { margin: 0; padding: 0; overflow: hidden; background: #050508; font-family: sans-serif; }
+        canvas { display: block; }
+        
+        #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; background: rgba(0,0,0,0.8); z-index: 10; }
+        .panel { background: #111; border: 2px solid #00f3ff; border-radius: 10px; padding: 30px; width: 350px; text-align: center; box-shadow: 0 0 20px rgba(0, 243, 255, 0.3); color: white; }
+        .logo { font-size: 28px; font-weight: bold; color: #00f3ff; margin-bottom: 20px; text-shadow: 0 0 10px #00f3ff; }
+        
+        input { width: 90%; padding: 10px; margin: 10px 0; background: #000; border: 1px solid #555; color: white; border-radius: 5px; outline: none; }
+        input:focus { border-color: #00f3ff; }
+        input[type="color"] { height: 40px; padding: 2px; cursor: pointer; }
+        
+        button { width: 100%; padding: 10px; margin: 5px 0; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 16px; transition: 0.2s; }
+        #loginBtn { background: #ffd54d; color: black; }
+        #registerBtn { background: #39ff14; color: black; }
+        #playBtn { background: #00f3ff; color: black; margin-top: 15px; font-size: 20px; padding: 15px; }
+        button:hover { filter: brightness(1.2); }
+        
+        #authMessage { font-size: 14px; min-height: 20px; margin: 10px 0; }
+        #loggedInInfo { display: none; margin-bottom: 20px; border: 1px solid #39ff14; padding: 10px; border-radius: 5px; background: rgba(57, 255, 20, 0.1); }
+        #logoutBtn { background: transparent; border: 1px solid #ff3333; color: #ff3333; padding: 5px; margin-top: 10px; font-size: 12px; }
+        
+        #hud { position: absolute; top: 10px; left: 10px; color: white; z-index: 5; font-size: 20px; text-shadow: 1px 1px 2px black; display: none; }
+    </style>
 </head>
 <body>
-<div id="hud">Mass: 0 | Players: 0</div>
 
-<div id="leaderboard">
-  <h3>Leaderboard</h3>
-  <ol id="lbList"></ol>
-</div>
+    <div id="hud">Massa: <span id="massDisplay">20</span></div>
+    <canvas id="gameCanvas"></canvas>
 
-<div id="chatContainer">
-  <div id="chatMessages"></div>
-  <input id="chatInput" placeholder="Press ENTER to chat..." maxlength="100" />
-</div>
+    <div id="ui">
+        <div class="panel">
+            <div class="logo">ZERO THE LEGEND</div>
+            
+            <!-- Info Utente (Nascosto se non loggato) -->
+            <div id="loggedInInfo">
+                Connesso come: <b id="dispName" style="color:#39ff14"></b><br>
+                Livello <span id="dispLevel"></span> | Best: <span id="dispBest"></span>
+                <button id="logoutBtn">Logout</button>
+            </div>
 
-<div id="joinBox">
-  <div class="panel">
-    <div class="logo">ZERO THE LEGEND</div>
-    <div class="field-group">
-      <label>Player Name</label>
-      <input id="nameInput" placeholder="Your name" maxlength="16" value="ZeroPlayer" />
+            <!-- Form Login/Register (Nascosto se loggato) -->
+            <div id="authForms">
+                <input type="text" id="username" placeholder="Username" autocomplete="off">
+                <input type="password" id="password" placeholder="Password">
+                <div style="display: flex; gap: 10px;">
+                    <button id="loginBtn">Login</button>
+                    <button id="registerBtn">Registrati</button>
+                </div>
+                <div id="authMessage"></div>
+                <hr style="border-color: #333; margin: 15px 0;">
+            </div>
+
+            <input type="color" id="colorPicker" value="#00f3ff">
+            <button id="playBtn">GIOCA</button>
+        </div>
     </div>
-    <div class="field-group">
-      <label>Cell Color</label>
-      <input id="colorInput" type="color" value="#00f3ff" />
-    </div>
-    <div class="field-group">
-      <label>Skin URL (Optional, ex: i.imgur.com/...)</label>
-      <input id="skinInput" placeholder="https://..." />
-    </div>
-    <button id="joinBtn">PLAY</button>
-  </div>
-</div>
 
-<canvas id="c"></canvas>
+    <script>
+        // --- LOGICA AUTENTICAZIONE ---
+        const ui = document.getElementById('ui');
+        const authForms = document.getElementById('authForms');
+        const loggedInInfo = document.getElementById('loggedInInfo');
+        const msg = document.getElementById('authMessage');
+        
+        let currentUser = null;
 
-<script>
-const canvas = document.getElementById("c");
-const ctx = canvas.getContext("2d");
-function resize() { canvas.width = innerWidth; canvas.height = innerHeight; }
-resize();
-window.addEventListener("resize", resize);
+        function checkAuth() {
+            const token = localStorage.getItem('zl_token');
+            const name = localStorage.getItem('zl_name');
+            if (token && name) {
+                currentUser = { token, name };
+                authForms.style.display = 'none';
+                loggedInInfo.style.display = 'block';
+                document.getElementById('dispName').innerText = name;
+                document.getElementById('dispLevel').innerText = localStorage.getItem('zl_level') || 1;
+                document.getElementById('dispBest').innerText = localStorage.getItem('zl_best') || 0;
+            } else {
+                authForms.style.display = 'block';
+                loggedInInfo.style.display = 'none';
+                currentUser = null;
+            }
+        }
+        checkAuth();
 
-let ws = null;
-let myId = null;
-let worldSize = 4000;
-let latestState = { players: [], food: [], viruses: [], ejectedMass: [] };
+        document.getElementById('registerBtn').onclick = async () => {
+            const user = document.getElementById('username').value;
+            const pass = document.getElementById('password').value;
+            if(!user || !pass) return msg.innerText = "Inserisci dati!";
+            
+            const res = await fetch('/api/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: user, password: pass })
+            });
+            const data = await res.json();
+            msg.style.color = res.ok ? "#39ff14" : "#ff3333";
+            msg.innerText = data.message || data.error;
+        };
 
-let prevState = null;
-let stateReceivedAt = 0;
-const SERVER_TICK_MS = 1000 / 30;
+        document.getElementById('loginBtn').onclick = async () => {
+            const user = document.getElementById('username').value;
+            const pass = document.getElementById('password').value;
+            if(!user || !pass) return msg.innerText = "Inserisci dati!";
+            
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: user, password: pass })
+            });
+            const data = await res.json();
+            
+            if (res.ok) {
+                localStorage.setItem('zl_token', data.token);
+                localStorage.setItem('zl_name', data.username);
+                localStorage.setItem('zl_level', data.level);
+                localStorage.setItem('zl_best', data.bestMass);
+                checkAuth();
+            } else {
+                msg.style.color = "#ff3333";
+                msg.innerText = data.error;
+            }
+        };
 
-// NUOVO: Cache per le skin caricate per evitare lag
-const loadedSkins = {};
+        document.getElementById('logoutBtn').onclick = () => {
+            localStorage.clear();
+            checkAuth();
+        };
 
-const joinBox = document.getElementById("joinBox");
-const joinBtn = document.getElementById("joinBtn");
-const nameInput = document.getElementById("nameInput");
-const colorInput = document.getElementById("colorInput");
-const skinInput = document.getElementById("skinInput");
 
-const chatMessages = document.getElementById("chatMessages");
-const chatInput = document.getElementById("chatInput");
+        // --- LOGICA GIOCO ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let ws;
+        let myId = null;
+        let gameState = { players: {}, foods: [] };
+        
+        let mouseX = 0, mouseY = 0;
+        let cameraX = 0, cameraY = 0;
 
-function addChatMessage(sender, text, isServer = false) {
-  const p = document.createElement("p");
-  if (isServer) {
-    p.classList.add("server-msg");
-    p.textContent = text;
-  } else {
-    p.innerHTML = `<span class="sender">${sender}:</span> ${text}`;
-  }
-  chatMessages.appendChild(p);
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-}
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
 
-joinBtn.onclick = () => {
-  const name = nameInput.value.trim() || "Player";
-  const color = colorInput.value;
-  const skin = skinInput.value.trim();
+        document.getElementById('playBtn').onclick = () => {
+            ui.style.display = 'none';
+            document.getElementById('hud').style.display = 'block';
+            
+            const name = currentUser ? currentUser.name : "Guest_" + Math.floor(Math.random()*100);
+            const color = document.getElementById('colorPicker').value;
 
-  joinBtn.textContent = "Connecting...";
-  
-  if (!ws || ws.readyState !== WebSocket.OPEN) {
-    connect(name, color, skin);
-  } else {
-    ws.send(JSON.stringify({ t: "respawn", name, color, skin }));
-    joinBox.style.display = "none";
-    canvas.focus();
-  }
-};
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                // Modifica qui in basso con il tuo IP o Dominio se lo pubblichi online
+                ws = new WebSocket('ws://' + window.location.host); 
+                
+                ws.onopen = () => {
+                    ws.send(JSON.stringify({ t: 'join', name, color }));
+                };
 
-function connect(name, color, skin) {
-  const wsProtocol = window.location.protocol === "https:" ? "wss://" : "ws://";
-  const wsUrl = wsProtocol + location.hostname + "/ws";
-  
-  try {
-    ws = new WebSocket(wsUrl);
-  } catch (e) {
-    addChatMessage("System", "Impossibile creare il WebSocket.", true);
-    joinBtn.textContent = "PLAY";
-    return;
-  }
-  
-  ws.onopen = () => {
-    ws.send(JSON.stringify({ t: "join", name, color, skin }));
-    addChatMessage("System", "Connected to server.", true);
-    joinBox.style.display = "none";
-    canvas.focus();
-  };
-  
-  ws.onmessage = (ev) => {
-    const msg = JSON.parse(ev.data);
-    if (msg.t === "welcome") {
-      myId = msg.id;
-      worldSize = msg.worldSize;
-    } else if (msg.t === "state") {
-      prevState = latestState;
-      latestState = msg;
-      stateReceivedAt = performance.now();
-      
-      const me = latestState.players.find((p) => p.id === myId);
-      if (me && !me.alive && joinBox.style.display === "none") {
-        joinBtn.textContent = "Respawn";
-        joinBox.style.display = "flex";
-      }
-    } else if (msg.t === "chat") {
-      addChatMessage(msg.name, msg.msg);
-    }
-  };
-  
-  ws.onerror = (err) => {
-    addChatMessage("System", "Errore di connessione.", true);
-    joinBox.style.display = "flex";
-    joinBtn.textContent = "Riprova";
-  };
-  
-  ws.onclose = () => {
-    addChatMessage("System", "Disconnected from server.", true);
-    joinBox.style.display = "flex";
-    joinBtn.textContent = "Riconnetti";
-  };
-}
+                ws.onmessage = (e) => {
+                    const data = JSON.parse(e.data);
+                    if (data.t === 'init') myId = data.id;
+                    if (data.t === 'update') gameState = data;
+                };
 
-let mouse = { x: 0, y: 0 };
-canvas.addEventListener("mousemove", (e) => {
-  mouse.x = e.clientX - canvas.width / 2;
-  mouse.y = e.clientY - canvas.height / 2;
-});
+                ws.onclose = () => {
+                    alert("Disconnesso dal server.");
+                    window.location.reload();
+                };
+            } else {
+                ws.send(JSON.stringify({ t: 'respawn', name, color }));
+            }
+        };
 
-window.addEventListener("keydown", (e) => {
-  if (document.activeElement === chatInput) {
-    if (e.code === "Enter") {
-      const text = chatInput.value.trim();
-      if (text && ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ t: "chat", msg: text }));
-      }
-      chatInput.value = "";
-      chatInput.blur();
-    } else if (e.code === "Escape") {
-      chatInput.value = "";
-      chatInput.blur();
-    }
-    return;
-  }
+        window.addEventListener('mousemove', (e) => {
+            if (!myId || !gameState.players[myId]) return;
+            // Calcola la posizione globale del mouse sommando la camera
+            const targetX = e.clientX - canvas.width / 2 + cameraX;
+            const targetY = e.clientY - canvas.height / 2 + cameraY;
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ t: 'mouse', x: targetX, y: targetY }));
+            }
+        });
 
-  if (e.code === "Enter") {
-    chatInput.focus();
-    e.preventDefault();
-    return;
-  }
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  if (!ws || ws.readyState !== WebSocket.OPEN) return;
-  if (e.code === "Space") {
-    ws.send(JSON.stringify({ t: "split", dx: mouse.x, dy: mouse.y }));
-  } else if (e.code === "KeyW") {
-    ws.send(JSON.stringify({ t: "eject", dx: mouse.x, dy: mouse.y }));
-  }
-});
+            let me = gameState.players[myId];
+            if (me) {
+                // Aggiorna camera e HUD
+                cameraX = me.x;
+                cameraY = me.y;
+                document.getElementById('massDisplay').innerText = Math.floor(me.r);
+            }
 
-setInterval(() => {
-  if (ws && ws.readyState === WebSocket.OPEN && document.activeElement !== chatInput) {
-    ws.send(JSON.stringify({ t: "input", dx: mouse.x, dy: mouse.y }));
-  }
-}, 1000 / 20);
+            ctx.save();
+            // Trasla il mondo rispetto al giocatore (Camera)
+            ctx.translate(canvas.width / 2 - cameraX, canvas.height / 2 - cameraY);
 
-function lerp(a, b, t) { return a + (b - a) * t; }
+            // Disegna griglia di sfondo
+            ctx.strokeStyle = "rgba(0, 243, 255, 0.1)";
+            for(let x = 0; x < 3000; x += 50) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 3000); ctx.stroke();
+            }
+            for(let y = 0; y < 3000; y += 50) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(3000, y); ctx.stroke();
+            }
+            
+            // Bordi mappa
+            ctx.strokeStyle = "red";
+            ctx.strokeRect(0, 0, 3000, 3000);
 
-function getInterpolatedPlayers() {
-  if (!prevState) return latestState.players;
-  const t = Math.min(1, (performance.now() - stateReceivedAt) / SERVER_TICK_MS);
-  return latestState.players.map((p) => {
-    const prev = prevState.players.find((pp) => pp.id === p.id);
-    if (!prev) return p;
-    return {
-      ...p,
-      cells: p.cells.map((c, i) => {
-        const pc = prev.cells[i];
-        if (!pc) return c;
-        return { ...c, x: lerp(pc.x, c.x, t), y: lerp(pc.y, c.y, t) };
-      }),
-    };
-  });
-}
+            // Disegna Cibo
+            gameState.foods.forEach(f => {
+                ctx.fillStyle = f.color;
+                ctx.beginPath();
+                ctx.arc(f.x, f.y, 5, 0, Math.PI * 2);
+                ctx.fill();
+            });
 
-function drawGrid(camX, camY) {
-  const gridSize = 50;
-  ctx.strokeStyle = "rgba(0, 243, 255, 0.05)";
-  ctx.lineWidth = 1;
+            // Disegna Giocatori
+            Object.values(gameState.players).forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Bordo neon
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = "rgba(255,255,255,0.3)";
+                ctx.stroke();
 
-  const startX = Math.max(0, Math.floor((camX - canvas.width / 2) / gridSize) * gridSize);
-  const endX = Math.min(worldSize, Math.ceil((camX + canvas.width / 2) / gridSize) * gridSize);
-  const startY = Math.max(0, Math.floor((camY - canvas.height / 2) / gridSize) * gridSize);
-  const endY = Math.min(worldSize, Math.ceil((camY + canvas.height / 2) / gridSize) * gridSize);
+                // Nome
+                ctx.fillStyle = "white";
+                ctx.font = "bold 14px sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText(p.name, p.x, p.y + 5);
+            });
 
-  ctx.beginPath();
-  for (let x = startX; x <= endX; x += gridSize) {
-    ctx.moveTo(x, startY); ctx.lineTo(x, endY);
-  }
-  for (let y = startY; y <= endY; y += gridSize) {
-    ctx.moveTo(startX, y); ctx.lineTo(endX, y);
-  }
-  ctx.stroke();
-}
-
-function updateLeaderboard() {
-  const lbList = document.getElementById("lbList");
-  const sorted = [...latestState.players]
-    .filter(p => p.alive)
-    .map(p => ({
-      id: p.id,
-      name: p.name,
-      mass: p.cells.reduce((s, c) => s + c.mass, 0)
-    }))
-    .sort((a, b) => b.mass - a.mass)
-    .slice(0, 10);
-
-  lbList.innerHTML = "";
-  for (const p of sorted) {
-    const li = document.createElement("li");
-    li.textContent = `${p.name} - ${Math.round(p.mass)}`;
-    if (p.id === myId) li.classList.add("me");
-    lbList.appendChild(li);
-  }
-}
-
-// NUOVO: Disegno dei virus "spinosi"
-function drawVirus(x, y, radius) {
-    ctx.fillStyle = "#33ff33";
-    ctx.strokeStyle = "#22aa22";
-    ctx.lineWidth = 2;
-    
-    ctx.beginPath();
-    const spikes = 20;
-    for (let i = 0; i < spikes * 2; i++) {
-        const r = (i % 2 === 0) ? radius + 5 : radius - 2;
-        const a = (Math.PI / spikes) * i;
-        if (i === 0) ctx.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
-        else ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-}
-
-// NUOVO: Disegno della minimappa
-function drawMinimap(camX, camY) {
-    const size = 150;
-    const padding = 20;
-    const startX = canvas.width - size - padding;
-    const startY = canvas.height - size - padding;
-    
-    // Sfondo Minimappa
-    ctx.fillStyle = "rgba(5, 5, 8, 0.8)";
-    ctx.strokeStyle = "rgba(0, 243, 255, 0.5)";
-    ctx.lineWidth = 1;
-    ctx.fillRect(startX, startY, size, size);
-    ctx.strokeRect(startX, startY, size, size);
-
-    const scale = size / worldSize;
-
-    // Disegna il giocatore
-    if (camX && camY) {
-        ctx.fillStyle = "#ffd54d";
-        ctx.beginPath();
-        ctx.arc(startX + (camX * scale), startY + (camY * scale), 4, 0, Math.PI * 2);
-        ctx.fill();
-    }
-}
-
-function render() {
-  requestAnimationFrame(render);
-  ctx.fillStyle = "#050508";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  const me = latestState.players.find((p) => p.id === myId);
-  const camX = me && me.cells[0] ? me.cells[0].x : worldSize / 2;
-  const camY = me && me.cells[0] ? me.cells[0].y : worldSize / 2;
-
-  ctx.save();
-  ctx.translate(canvas.width / 2 - camX, canvas.height / 2 - camY);
-
-  drawGrid(camX, camY);
-
-  ctx.strokeStyle = "#00f3ff";
-  ctx.lineWidth = 3;
-  ctx.strokeRect(0, 0, worldSize, worldSize);
-
-  for (const f of latestState.food) {
-    ctx.fillStyle = f.color || "#39ff14";
-    ctx.beginPath();
-    ctx.arc(f.x, f.y, 4, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  if (latestState.ejectedMass) {
-    for (const e of latestState.ejectedMass) {
-      ctx.fillStyle = e.color || "#00f3ff";
-      ctx.beginPath();
-      ctx.arc(e.x, e.y, Math.sqrt(e.mass) * 4, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  // MODIFICATO: Richiama la nuova funzione drawVirus
-  if (latestState.viruses) {
-    for (const v of latestState.viruses) {
-      drawVirus(v.x, v.y, Math.sqrt(v.mass) * 4);
-    }
-  }
-
-  for (const p of getInterpolatedPlayers()) {
-    if (!p.alive) continue;
-    const isMe = p.id === myId;
-    const baseColor = p.color || (isMe ? "#ffd54d" : "#00f3ff");
-
-    for (const c of p.cells) {
-      const radius = Math.sqrt(c.mass) * 4;
-      
-      ctx.save(); // Salva lo stato prima di applicare la skin
-      ctx.beginPath();
-      ctx.arc(c.x, c.y, radius, 0, Math.PI * 2);
-      
-      // NUOVO: Gestione delle Skin
-      if (p.skin && p.skin.startsWith("http")) {
-          ctx.clip(); // Ritaglia a forma di cerchio
-          
-          if (!loadedSkins[p.skin]) {
-              const img = new Image();
-              img.crossOrigin = "anonymous"; // Importante per evitare errori CORS
-              img.src = p.skin;
-              loadedSkins[p.skin] = img;
-          }
-          
-          const skinImg = loadedSkins[p.skin];
-          if (skinImg.complete) {
-              ctx.drawImage(skinImg, c.x - radius, c.y - radius, radius * 2, radius * 2);
-          } else {
-             // Fallback mentre l'immagine carica
-             ctx.fillStyle = baseColor;
-             ctx.fill(); 
-          }
-      } else {
-          ctx.fillStyle = baseColor;
-          ctx.fill();
-      }
-
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.restore(); // Ripristina per non influenzare altri disegni
-    }
-
-    const head = p.cells[0];
-    if (head) {
-      const headRadius = Math.sqrt(head.mass) * 4;
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 13px sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(p.name, head.x, head.y - headRadius - 8);
-    }
-  }
-
-  ctx.restore(); // Fine traslazione telecamera
-
-  // UI disegnata "sopra" tutto il resto, ancorata allo schermo
-  const mass = me ? me.cells.reduce((s, c) => s + c.mass, 0) : 0;
-  document.getElementById("hud").textContent = `Mass: ${Math.round(mass)} | Players: ${latestState.players.filter(p => p.alive).length}`;
-  updateLeaderboard();
-  
-  // NUOVO: Disegna la minimappa nell'angolo
-  drawMinimap(camX, camY);
-}
-
-render();
-</script>
+            ctx.restore();
+            requestAnimationFrame(draw);
+        }
+        
+        draw();
+    </script>
 </body>
 </html>
