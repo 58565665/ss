@@ -965,6 +965,22 @@
             ctx.beginPath(); ctx.arc(pos.x, pos.y, ring, -now*0.002, now*0.002 + Math.PI*1.7); ctx.stroke();
             ctx.restore();
           }
+          if (p.speedBoost) {
+            ctx.save();
+            ctx.globalAlpha = 0.75; ctx.strokeStyle = '#ffd54d'; ctx.lineWidth = Math.max(2, r * 0.05); ctx.shadowColor = '#ffd54d'; ctx.shadowBlur = 18;
+            const spin = now * 0.01;
+            for (let k = 0; k < 3; k++) {
+              const a0 = spin + k * (Math.PI * 2 / 3);
+              ctx.beginPath(); ctx.arc(pos.x, pos.y, r * 1.12, a0, a0 + 0.7); ctx.stroke();
+            }
+            ctx.restore();
+          }
+          if (p.magnet) {
+            ctx.save();
+            ctx.globalAlpha = 0.5 + Math.sin(now * 0.006) * 0.15; ctx.strokeStyle = '#4dd0ff'; ctx.lineWidth = Math.max(1.5, r * 0.03); ctx.shadowColor = '#4dd0ff'; ctx.shadowBlur = 12;
+            ctx.beginPath(); ctx.arc(pos.x, pos.y, r * 1.28, 0, Math.PI * 2); ctx.stroke();
+            ctx.restore();
+          }
           ctx.strokeStyle = p.shield ? '#4de8ff' : 'rgba(0,0,0,.35)';
           ctx.lineWidth = Math.max(1, Math.min(18, r * (p.shield ? 0.10 : 0.045)));
           ctx.stroke();
@@ -1008,6 +1024,8 @@
         let txt = m ? `Massa: ${Math.round(m.mass || 0)}` : '';
         if (m && myTeam !== null && myTeam !== undefined) txt += ` · Squadra: ${teams.NAMES[myTeam] || ''}`;
         if (m && m.shield) txt += ' · 🛡️';
+        if (m && m.speedBoost) txt += ' · ⚡';
+        if (m && m.magnet) txt += ' · 🧲';
         ui.mass.textContent = txt;
       }
       if (ui.respawn && ui.respawnCount) {
