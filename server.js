@@ -30,7 +30,7 @@ function loadLocalEnv(file) {
   } catch (_) {}
 }
 loadLocalEnv(path.join(__dirname, '.env'));
-const { GameServer, CONFIG } = require('./backend/game');
+const { GameServer, CONFIG } = require('./game');
 const { attachFeaturesV2 } = require('./features-v2');
 
 const game = new GameServer();
@@ -229,6 +229,8 @@ const server = http.createServer((req, res) => {
           case 'pause': data=game.adminPause(); break;
           case 'resume': data=game.adminResume(); break;
           case 'resetMatch': data=game.adminResetMatch(); break;
+          case 'startBattleRoyale': ok=!!game.adminStartBattleRoyale(); break;
+          case 'stopBattleRoyale': ok=!!game.adminStopBattleRoyale(); break;
           default: ok=false; error='Azione Admin non supportata.';
         }
       } catch (e) { ok=false; error=e?.message || 'Errore Admin.'; }
@@ -537,6 +539,7 @@ wss.on('connection', (ws, req) => {
         else if (a === 'inventory') result = game.getInventory(player);
         else if (a === 'history') result = game.getPurchaseHistory(player);
         else if (a === 'quests') result = game.getQuests(player);
+        else if (a === 'achievements') result = game.getAchievements(player);
         else if (a === 'stats') result = game.shopStats(player);
         else if (a === 'daily') ok = game.claimDailyReward(player);
         else if (a === 'starter') ok = game.starterGift(player);
@@ -560,7 +563,7 @@ wss.on('connection', (ws, req) => {
         else if (a === 'boost') ok = game.activateCoinBoost(player, 2, 60000);
         else if (a === 'refund') ok = game.refundLastPurchase(player);
         else ok = false;
-        safeSend(ws, JSON.stringify({ type:'feature-result', requestId: msg.requestId || null, category:'shop', action:a, ok:!!ok, error, data:result, wallet:game.getWallet(player), quests:game.getQuests(player), shopStats:game.shopStats(player) }));
+        safeSend(ws, JSON.stringify({ type:'feature-result', requestId: msg.requestId || null, category:'shop', action:a, ok:!!ok, error, data:result, wallet:game.getWallet(player), quests:game.getQuests(player), shopStats:game.shopStats(player), achievements:game.getAchievements(player) }));
         break;
       }
       case 'refresh-skin': {
@@ -631,6 +634,8 @@ wss.on('connection', (ws, req) => {
           case 'pause': result=game.adminPause(); break;
           case 'resume': result=game.adminResume(); break;
           case 'resetMatch': result=game.adminResetMatch(); break;
+          case 'startBattleRoyale': ok=!!game.adminStartBattleRoyale(); break;
+          case 'stopBattleRoyale': ok=!!game.adminStopBattleRoyale(); break;
           default: ok=false; break;
         }
         safeSend(ws, JSON.stringify({type:'feature-result',requestId: msg.requestId || null,category:'admin',action:a,ok:!!ok,data:result}));

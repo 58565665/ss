@@ -124,7 +124,7 @@
     let myTeam = null;
     let myColor = localStorage.getItem('skin-color') || null;
     let world = { width: 5000, height: 5000 };
-    let state = { players: [], pellets: [], powerups: [], virusProjectiles: [], zones: [], killfeed: [], leaderboard: [], decoys: [], traps: [], mines: [], pvpLeaderboard: [], announcements: [], events: [] };
+    let state = { players: [], pellets: [], powerups: [], virusProjectiles: [], zones: [], battleRoyale: null, killfeed: [], leaderboard: [], decoys: [], traps: [], mines: [], pvpLeaderboard: [], announcements: [], events: [] };
     let camera = { x: world.width / 2, y: world.height / 2, zoom: 1, userZoom: 1 };
     // 3D orbit camera: 360° yaw + gentle pitch. Rendering stays lightweight on Canvas.
     const cameraOrbit360 = { yaw: 0, pitch: 8, dragging: false, lastX: 0, lastY: 0 };
@@ -592,6 +592,7 @@
             powerups: Array.isArray(msg.powerups) ? msg.powerups : [],
             virusProjectiles: Array.isArray(msg.virusProjectiles) ? msg.virusProjectiles : [],
             zones: Array.isArray(msg.zones) ? msg.zones : [],
+            battleRoyale: msg.battleRoyale && typeof msg.battleRoyale === 'object' ? msg.battleRoyale : (old.battleRoyale || null),
             killfeed: Array.isArray(msg.killfeed) ? msg.killfeed : [],
             leaderboard: Array.isArray(msg.leaderboard) ? msg.leaderboard : [],
             decoys: Array.isArray(msg.decoys) ? msg.decoys : [],
@@ -612,6 +613,9 @@
             else if (ev.type === 'godmode') { fx('godmode', pos.x, pos.y, '#7df9ff', 130); playSfx('godmode'); }
             else if (ev.type === 'split') { fx('burst', pos.x, pos.y, '#ff66cc', 70); playSfx('split'); }
             else if (ev.type === 'eject') { fx('pulse', pos.x, pos.y, '#ffd166', 35); playSfx('eject'); }
+            else if (ev.type === 'status' && ev.name === 'teleport') { fx('burst', pos.x, pos.y, '#ff9d4d', 90); playSfx('split'); }
+            else if (ev.type === 'achievement') { fx('godmode', pos.x, pos.y, '#ffd54d', 100); addChatMsg('🏆', `Achievement sbloccato: ${ev.label} (+${ev.reward} ZC)`, '#ffd54d'); }
+            else if (ev.type === 'battle-royale-win') { fx('godmode', pos.x, pos.y, '#ffd54d', 160); addChatMsg('👑', 'Hai vinto la Battle Royale!', '#ffd54d'); }
           }
           const m = state.players.find((p) => p.id === myId);
           if (m) {
@@ -788,15 +792,33 @@
     function drawZones() {
       for (const z of state.zones) {
         if (Math.abs(z.x - camera.x) > 2500 || Math.abs(z.y - camera.y) > 2500) continue;
+        const color = z.kind === 'bonus' ? '126,242,154' : z.kind === 'safe' ? '92,196,255' : '255,77,77';
         const grad = ctx.createRadialGradient(z.x, z.y, 0, z.x, z.y, z.r);
-        grad.addColorStop(0, z.kind === 'bonus' ? 'rgba(126,242,154,.28)' : 'rgba(255,77,77,.28)');
-        grad.addColorStop(1, z.kind === 'bonus' ? 'rgba(126,242,154,0)' : 'rgba(255,77,77,0)');
+        grad.addColorStop(0, `rgba(${color},.28)`);
+        grad.addColorStop(1, `rgba(${color},0)`);
         ctx.fillStyle = grad;
         ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = z.kind === 'bonus' ? 'rgba(126,242,154,.7)' : 'rgba(255,77,77,.7)';
+        ctx.strokeStyle = `rgba(${color},.7)`;
         ctx.lineWidth = 2 / camera.zoom;
         ctx.stroke();
       }
+    }
+
+    function drawBattleRoyale() {
+      const br = state.battleRoyale;
+      if (!br || !br.active) return;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(camera.x - 3000, camera.y - 3000, 6000, 6000);
+      ctx.arc(br.center.x, br.center.y, br.radius, 0, Math.PI * 2, true);
+      ctx.fillStyle = 'rgba(0,0,0,.45)';
+      ctx.fill('evenodd');
+      ctx.restore();
+      ctx.strokeStyle = 'rgba(255,220,80,.9)';
+      ctx.lineWidth = 5 / camera.zoom;
+      ctx.beginPath();
+      ctx.arc(br.center.x, br.center.y, br.radius, 0, Math.PI * 2);
+      ctx.stroke();
     }
 
     function predictEjectVisual() {
@@ -860,7 +882,7 @@
     }
 
     function drawPowerups() {
-      const colors = { virus: '#ff5c8a', speed: '#ffd54d', mass: '#7ef29a', invisible: '#b48cff', magnet: '#4dd0ff', shield: '#4de8ff' };
+      const colors = { virus: '#ff5c8a', speed: '#ffd54d', mass: '#7ef29a', invisible: '#b48cff', magnet: '#4dd0ff', shield: '#4de8ff', teleport: '#ff9d4d' };
       for (const pu of state.powerups) {
         if (Math.abs(pu.x - camera.x) > viewW / 2 / camera.zoom + 100 || Math.abs(pu.y - camera.y) > viewH / 2 / camera.zoom + 100) continue;
         const r = 6 * Math.cbrt(Math.max(1, pu.mass || 1));
@@ -1053,8 +1075,12 @@
       mmCtx.fillStyle = 'rgba(255,255,255,.04)'; mmCtx.fillRect(0, 0, 160, 160);
       mmCtx.strokeStyle = 'rgba(255,77,77,.6)'; mmCtx.strokeRect(0, 0, world.width * s, world.height * s);
       for (const z of state.zones) {
-        mmCtx.fillStyle = z.kind === 'bonus' ? 'rgba(126,242,154,.25)' : 'rgba(255,77,77,.25)';
+        mmCtx.fillStyle = z.kind === 'bonus' ? 'rgba(126,242,154,.25)' : z.kind === 'safe' ? 'rgba(92,196,255,.25)' : 'rgba(255,77,77,.25)';
         mmCtx.beginPath(); mmCtx.arc(z.x * s, z.y * s, z.r * s, 0, Math.PI * 2); mmCtx.fill();
+      }
+      if (state.battleRoyale && state.battleRoyale.active) {
+        mmCtx.strokeStyle = 'rgba(255,220,80,.9)'; mmCtx.lineWidth = 1.5;
+        mmCtx.beginPath(); mmCtx.arc(state.battleRoyale.center.x * s, state.battleRoyale.center.y * s, state.battleRoyale.radius * s, 0, Math.PI * 2); mmCtx.stroke();
       }
       for (const p of state.players) {
         if (!p.cells || !p.cells.length) continue;
@@ -1332,6 +1358,7 @@
       ctx.translate(-camera.x, -camera.y);
       drawGrid();
       drawZones();
+      drawBattleRoyale();
       drawPredictedEjects(now);
       drawPellets();
       drawPowerups();
