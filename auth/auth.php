@@ -1,600 +1,227 @@
-<?php
-declare(strict_types=1);
-ob_start(); // Cattura qualsiasi output accidentale (BOM, notice, ecc.) prima che rovini il JSON
+(() => {
+  'use strict';
 
-header('Content-Type: application/json; charset=utf-8');
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-header('Pragma: no-cache');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, X-Api-Secret');
+  const CONFIG = window.GAME_CONFIG || {};
+  // Aggiornato per puntare al nuovo server backend su Render
+  const AUTH_URL = String(CONFIG.AUTH_API_URL || 'https://ss-aw6z.onrender.com').trim().replace(/\/$/, '');
+  const TOKEN_KEY = 'zl_auth_token';
+  const USER_KEY = 'zl_auth_user';
 
-$origin = isset($_SERVER['HTTP_ORIGIN']) ? trim((string)$_SERVER['HTTP_ORIGIN']) : '';
-if ($origin !== '') {
-    header('Access-Control-Allow-Origin: ' . $origin);
-    header('Vary: Origin');
-} else {
-    header('Access-Control-Allow-Origin: *');
-}
+  const $ = (id) => document.getElementById(id);
+  const portal = $('portalOverlay');
+  const loginForm = $('loginForm');
+  const registerForm = $('registerForm');
+  const loginError = $('loginError');
+  const regError = $('regError');
+  const regSuccess = $('regSuccess');
+  const authStatus = $('authStatus');
 
-if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
-    while (ob_get_level() > 0) { @ob_end_clean(); }
-    http_response_code(204);
-    exit;
-}
+  const clean = (v, max = 120) => String(v ?? '').trim().slice(0, max);
 
-require_once __DIR__ . '/db-config.php';
+  function getToken() {
+    try { return localStorage.getItem(TOKEN_KEY) || ''; } catch (_) { return ''; }
+  }
 
-function respond(array $data, int $status = 200): void {
-    // Scarta qualunque output accidentale accumulato nel buffer (avvisi, BOM, ecc.)
-    // cos\u00ec il client riceve SEMPRE e SOLO JSON pulito, mai testo corrotto davanti.
-    while (ob_get_level() > 0) { @ob_end_clean(); }
-    http_response_code($status);
-    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    exit;
-}
+  function getUser() {
+    try { return JSON.parse(localStorage.getItem(USER_KEY) || 'null'); } catch (_) { return null; }
+  }
 
-function request_body(): array {
-    $raw = file_get_contents('php://input');
-    if (is_string($raw) && $raw !== '') {
-        $decoded = json_decode($raw, true);
-        if (is_array($decoded)) return $decoded;
-    }
-    return is_array($_POST) ? $_POST : [];
-}
+  function setSession(data) {
+    if (!data || !data.ok || !data.token) throw new Error(data?.error || 'Sessione non valida');
+    localStorage.setItem(TOKEN_KEY, data.token);
+    localStorage.setItem(USER_KEY, JSON.stringify(data.user || null));
+    if (data.user?.name) localStorage.setItem('currentUser', data.user.name);
+    window.dispatchEvent(new CustomEvent('auth-changed', { detail: data }));
+  }
 
-function table_exists(string $table): bool {
-    $st = db()->prepare("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?");
-    $st->execute([$table]);
-    return (int)$st->fetchColumn() > 0;
-}
+  function clearSession() {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+    localStorage.removeItem('currentUser');
+    window.dispatchEvent(new Event('auth-changed'));
+  }
 
-function column_exists(string $table, string $column): bool {
-    $st = db()->prepare("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?");
-    $st->execute([$table, $column]);
-    return (int)$st->fetchColumn() > 0;
-}
-
-function ensure_auth_schema(): string {
-    // Installazione ZeroLegend: una sola tabella utenti canonica.
-    // Il database reale del progetto usa `zl_users`; non alternare più tra users/zl_users.
-    $table = 'zl_users';
-    if (!table_exists($table)) {
-        db()->exec("CREATE TABLE IF NOT EXISTS zl_users (
-            id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-            username VARCHAR(80) NOT NULL,
-            email VARCHAR(190) NOT NULL,
-            password_hash VARCHAR(255) NOT NULL,
-            provider VARCHAR(30) NOT NULL DEFAULT 'local',
-            role VARCHAR(20) NOT NULL DEFAULT 'user',
-            level INT NOT NULL DEFAULT 1,
-            xp INT NOT NULL DEFAULT 0,
-            coins INT NOT NULL DEFAULT 1000,
-            skins TEXT NULL,
-            equipped_skin VARCHAR(80) NOT NULL DEFAULT 'default',
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            PRIMARY KEY (id),
-            UNIQUE KEY uq_zl_users_email (email)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    }
-    $alter = [];
-    if (!column_exists($table, 'username')) $alter[] = "ADD COLUMN username VARCHAR(80) NULL AFTER id";
-    if (!column_exists($table, 'email')) $alter[] = "ADD COLUMN email VARCHAR(190) NULL AFTER username";
-    if (!column_exists($table, 'password_hash')) $alter[] = "ADD COLUMN password_hash VARCHAR(255) NULL AFTER email";
-    if (!column_exists($table, 'provider')) $alter[] = "ADD COLUMN provider VARCHAR(30) NOT NULL DEFAULT 'local' AFTER password_hash";
-    if (!column_exists($table, 'role')) $alter[] = "ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'user' AFTER provider";
-    if (!column_exists($table, 'level')) $alter[] = "ADD COLUMN level INT NOT NULL DEFAULT 1";
-    if (!column_exists($table, 'xp')) $alter[] = "ADD COLUMN xp INT NOT NULL DEFAULT 0";
-    if (!column_exists($table, 'coins')) $alter[] = "ADD COLUMN coins INT NOT NULL DEFAULT 1000";
-    if (!column_exists($table, 'skins')) $alter[] = "ADD COLUMN skins TEXT NULL";
-    if (!column_exists($table, 'equipped_skin')) $alter[] = "ADD COLUMN equipped_skin VARCHAR(80) NOT NULL DEFAULT 'default'";
-    if (!column_exists($table, 'created_at')) $alter[] = "ADD COLUMN created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP";
-    if (!column_exists($table, 'updated_at')) $alter[] = "ADD COLUMN updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP";
-    foreach ($alter as $sql) { try { db()->exec('ALTER TABLE `'.$table.'` '.$sql); } catch (Throwable $e) {} }
-    return $table;
-}
-
-function users_query_fields(string $table): string {
-    return "id, username, email, password_hash, provider, role, level, xp, coins, skins, equipped_skin, created_at, updated_at";
-}
-
-function fetch_user_by_email(string $email, string $table): ?array {
-    $st = db()->prepare("SELECT " . users_query_fields($table) . " FROM `$table` WHERE LOWER(TRIM(email)) = LOWER(TRIM(?)) LIMIT 1");
-    $st->execute([$email]);
-    $row = $st->fetch();
-    return $row ?: null;
-}
-
-function fetch_user_by_id(int $id, string $table): ?array {
-    $st = db()->prepare("SELECT " . users_query_fields($table) . " FROM `$table` WHERE id = ? LIMIT 1");
-    $st->execute([$id]);
-    $row = $st->fetch();
-    return $row ?: null;
-}
-
-function normalize_role(string $role): string {
-    $r = strtolower(trim($role));
-    return match ($r) {
-        'owner', 'administrator', 'administratoro', 'admin' => 'admin',
-        'moderator', 'mod', 'staff' => 'moderator',
-        'vip', 'premium' => 'vip',
-        'normal_user', 'normal-user', 'normal user', 'guest', 'member' => 'normal_user',
-        default => 'user',
-    };
-}
-
-function role_flags(string $role): array {
-    $r = normalize_role($role);
-    return [
-        'role' => $r,
-        'is_admin' => $r === 'admin' ? 1 : 0,
-        'is_moderator' => $r === 'moderator' ? 1 : 0,
-        'is_vip' => $r === 'vip' ? 1 : 0,
-        'is_staff' => in_array($r, ['admin','moderator'], true) ? 1 : 0,
-    ];
-}
-
-function public_user(array $u): array {
-    $flags = role_flags((string)($u['role'] ?? 'user'));
-    return [
-        'id' => (int)($u['id'] ?? 0),
-        'username' => (string)($u['username'] ?? ''),
-        'email' => (string)($u['email'] ?? ''),
-        'name' => (string)($u['username'] ?? ''),
-        'role' => $flags['role'],
-        'is_admin' => $flags['is_admin'],
-        'is_moderator' => $flags['is_moderator'],
-        'is_vip' => $flags['is_vip'],
-        'is_staff' => $flags['is_staff'],
-        'level' => (int)($u['level'] ?? 1),
-        'xp' => (int)($u['xp'] ?? 0),
-        'coins' => (int)($u['coins'] ?? 1000),
-        'skins' => (string)($u['skins'] ?? '["default"]'),
-        'equipped_skin' => (string)($u['equipped_skin'] ?? 'default'),
-    ];
-}
-
-function b64u_encode(string $s): string { return rtrim(strtr(base64_encode($s), '+/', '-_'), '='); }
-function b64u_decode(string $s) {
-    $pad = strlen($s) % 4;
-    if ($pad) $s .= str_repeat('=', 4 - $pad);
-    return base64_decode(strtr($s, '-_', '+/'), true);
-}
-
-function make_token(int $userId): string {
-    if (!defined('API_SECRET') || API_SECRET === '') throw new RuntimeException('API_SECRET non configurato.');
-    $now = time();
-    $payload = ['v'=>1,'uid'=>$userId,'iat'=>$now,'exp'=>$now + 30*86400,'nonce'=>bin2hex(random_bytes(12))];
-    $body = b64u_encode((string)json_encode($payload, JSON_UNESCAPED_SLASHES));
-    $sig = b64u_encode(hash_hmac('sha256', $body, (string)API_SECRET, true));
-    return 'zl1.' . $body . '.' . $sig;
-}
-
-function token_user(string $token, string $table): ?array {
-    $parts = explode('.', trim($token));
-    if (count($parts) !== 3 || $parts[0] !== 'zl1') return null;
-    if (!defined('API_SECRET') || API_SECRET === '') return null;
-    $expected = b64u_encode(hash_hmac('sha256', $parts[1], (string)API_SECRET, true));
-    if (!hash_equals($expected, $parts[2])) return null;
-    $json = b64u_decode($parts[1]);
-    if ($json === false) return null;
-    $payload = json_decode($json, true);
-    if (!is_array($payload) || (int)($payload['v'] ?? 0) !== 1) return null;
-    if ((int)($payload['exp'] ?? 0) < time()) return null;
-    return fetch_user_by_id((int)($payload['uid'] ?? 0), $table);
-}
-
-
-function ensure_profile_schema(): void {
-    db()->exec("CREATE TABLE IF NOT EXISTS zl_player_stats (
-      user_id INT UNSIGNED NOT NULL,
-      matches INT NOT NULL DEFAULT 0,
-      kills INT NOT NULL DEFAULT 0,
-      deaths INT NOT NULL DEFAULT 0,
-      best_mass INT NOT NULL DEFAULT 0,
-      best_rank INT NULL,
-      play_seconds INT NOT NULL DEFAULT 0,
-      elo INT NOT NULL DEFAULT 1000,
-      kill_streak INT NOT NULL DEFAULT 0,
-      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      PRIMARY KEY (user_id),
-      INDEX idx_stats_kills (kills),
-      INDEX idx_stats_elo (elo)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    db()->exec("CREATE TABLE IF NOT EXISTS zl_daily_progress (
-      user_id INT UNSIGNED NOT NULL,
-      day_key DATE NOT NULL,
-      kills INT NOT NULL DEFAULT 0,
-      matches INT NOT NULL DEFAULT 0,
-      best_mass INT NOT NULL DEFAULT 0,
-      coins_earned INT NOT NULL DEFAULT 0,
-      claimed_kills3 TINYINT(1) NOT NULL DEFAULT 0,
-      claimed_play1 TINYINT(1) NOT NULL DEFAULT 0,
-      claimed_mass500 TINYINT(1) NOT NULL DEFAULT 0,
-      last_total_kills INT NOT NULL DEFAULT 0,
-      last_total_matches INT NOT NULL DEFAULT 0,
-      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      PRIMARY KEY (user_id, day_key)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-}
-
-function ensure_player_row(int $userId): void {
-    ensure_profile_schema();
-    $st = db()->prepare("INSERT IGNORE INTO zl_player_stats (user_id) VALUES (?)");
-    $st->execute([$userId]);
-    $st = db()->prepare("INSERT IGNORE INTO zl_daily_progress (user_id, day_key) VALUES (?, CURRENT_DATE)");
-    $st->execute([$userId]);
-}
-
-function fetch_player_stats(int $userId): array {
-    ensure_player_row($userId);
-    $st = db()->prepare("SELECT user_id,matches,kills,deaths,best_mass,best_rank,play_seconds,elo,kill_streak,updated_at FROM zl_player_stats WHERE user_id=? LIMIT 1");
-    $st->execute([$userId]);
-    $row = $st->fetch();
-    return $row ?: ['user_id'=>$userId,'matches'=>0,'kills'=>0,'deaths'=>0,'best_mass'=>0,'best_rank'=>null,'play_seconds'=>0,'elo'=>1000,'kill_streak'=>0];
-}
-
-function fetch_daily(int $userId): array {
-    ensure_player_row($userId);
-    $st = db()->prepare("SELECT day_key,kills,matches,best_mass,coins_earned,claimed_kills3,claimed_play1,claimed_mass500 FROM zl_daily_progress WHERE user_id=? AND day_key=CURRENT_DATE LIMIT 1");
-    $st->execute([$userId]);
-    $row = $st->fetch() ?: ['day_key'=>date('Y-m-d'),'kills'=>0,'matches'=>0,'best_mass'=>0,'coins_earned'=>0,'claimed_kills3'=>0,'claimed_play1'=>0,'claimed_mass500'=>0];
-    $k=(int)$row['kills']; $m=(int)$row['matches']; $mass=(int)$row['best_mass'];
-    return [
-      'date'=>(string)$row['day_key'],
-      'rewards'=>[
-        ['id'=>'kills3','label'=>'Fai 3 uccisioni','progress'=>$k,'target'=>3,'reward'=>150,'claimed'=>(bool)$row['claimed_kills3']],
-        ['id'=>'play1','label'=>'Gioca 1 partita','progress'=>$m,'target'=>1,'reward'=>75,'claimed'=>(bool)$row['claimed_play1']],
-        ['id'=>'mass500','label'=>'Raggiungi 500 massa','progress'=>$mass,'target'=>500,'reward'=>100,'claimed'=>(bool)$row['claimed_mass500']],
-      ],
-      'coins_earned'=>(int)$row['coins_earned']
-    ];
-}
-
-function fetch_custom_skins_for_user(int $userId, string $equipped): array {
-    if (!table_exists('zl_custom_skins')) return [];
+  async function request(action, payload = {}) {
+    if (!AUTH_URL) throw new Error('AUTH_API_URL non configurato.');
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
     try {
-        $st=db()->prepare('SELECT id,skin_key,title,url,size_bytes,mime,width,height,active,created_at FROM zl_custom_skins WHERE user_id=? ORDER BY id DESC');
-        $st->execute([$userId]);
-        $rows=$st->fetchAll();
-        foreach($rows as &$row){
-            $row['id']=(int)$row['id']; $row['size_bytes']=(int)$row['size_bytes'];
-            $row['width']=isset($row['width'])?(int)$row['width']:0; $row['height']=isset($row['height'])?(int)$row['height']:0;
-            $row['active']=(bool)$row['active'];
-            $row['equipped']=($equipped==='custom:'.$row['id'].':'.$row['skin_key']) || ($equipped==='custom_'.$row['skin_key']);
-        }
-        unset($row);
-        return $rows;
-    } catch(Throwable $e) { return []; }
-}
+      const res = await fetch(AUTH_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ action, ...payload }),
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+      const text = await res.text();
+      let data = {};
+      try { data = JSON.parse(text); } catch (_) { data = { ok: false, error: `Risposta auth non JSON (HTTP ${res.status})` }; }
+      if (!res.ok && !data.error) data.error = `HTTP ${res.status}`;
+      if (res.status >= 500 && data.error) data.error = `Server auth: ${data.error}`;
+      if (!data.ok && !data.error) data.error = 'Operazione non riuscita.';
+      return data;
+    } catch (err) {
+      if (err?.name === 'AbortError') throw new Error('Servizio auth non risponde.');
+      throw new Error('Impossibile contattare il servizio auth.');
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
 
-function fetch_equipped_custom_skin(int $userId, string $equipped): ?array {
-    if (!table_exists('zl_custom_skins') || $equipped==='default' || $equipped==='') return null;
+  function switchPortalTab(tab) {
+    const isLogin = tab === 'login';
+    if ($('loginForm')) $('loginForm').style.display = isLogin ? 'block' : 'none';
+    if ($('registerForm')) $('registerForm').style.display = isLogin ? 'none' : 'block';
+    document.querySelectorAll('[data-portal-tab]').forEach((button) => button.classList.toggle('active', button.dataset.portalTab === tab));
+    if (loginError) loginError.style.display = 'none';
+    if (regError) regError.style.display = 'none';
+    if (regSuccess) regSuccess.style.display = 'none';
+  }
+
+  function showLoginError(message) {
+    if (!loginError) return;
+    loginError.textContent = message;
+    loginError.style.display = 'block';
+  }
+
+  function showRegError(message) {
+    if (!regError) return;
+    regError.textContent = message;
+    regError.style.display = 'block';
+  }
+
+  function applySession(user) {
+    if (!portal) return;
+    const authenticated = Boolean(getToken() && user);
+    portal.style.display = authenticated ? 'none' : 'flex';
+    const welcome = $('welcomeUser');
+    const name = $('name');
+    if (authenticated) {
+      const displayName = String(user.name || user.email || 'Player').slice(0, 16);
+      if (welcome) welcome.textContent = displayName;
+      if (name && !name.value) name.value = localStorage.getItem('agarNick') || displayName;
+      if (authStatus) authStatus.textContent = user.email ? `Accesso: ${user.email}` : 'Sessione attiva';
+    }
+  }
+
+  async function login() {
+    const email = clean($('loginEmail')?.value, 160).toLowerCase();
+    const password = $('loginPass')?.value || '';
+    if (!email || !password) return showLoginError('Inserisci email e password.');
     try {
-        $id=0; $key='';
-        if (preg_match('/^custom:(\d+):([A-Za-z0-9_]+)$/',$equipped,$m)) { $id=(int)$m[1]; $key=(string)$m[2]; }
-        elseif (preg_match('/^custom_([A-Za-z0-9_]+)$/',$equipped,$m)) { $key=(string)$m[1]; }
-        if ($id>0) {
-            $st=db()->prepare('SELECT id,skin_key,title,url,size_bytes,mime,width,height,active FROM zl_custom_skins WHERE id=? AND user_id=? LIMIT 1');
-            $st->execute([$id,$userId]);
-        } else {
-            $st=db()->prepare('SELECT id,skin_key,title,url,size_bytes,mime,width,height,active FROM zl_custom_skins WHERE skin_key=? AND user_id=? LIMIT 1');
-            $st->execute([$key,$userId]);
-        }
-        $row=$st->fetch();
-        if(!$row || !(int)$row['active']) return null;
-        $row['id']=(int)$row['id']; $row['size_bytes']=(int)$row['size_bytes'];
-        $row['width']=isset($row['width'])?(int)$row['width']:0; $row['height']=isset($row['height'])?(int)$row['height']:0;
-        $row['active']=true;
-        return $row;
-    } catch(Throwable $e) { return null; }
-}
+      const data = await request('login', { email, password });
+      if (!data.ok) return showLoginError(data.error || 'Credenziali non valide.');
+      setSession(data);
+      if ($('name')) $('name').value = localStorage.getItem('agarNick') || data.user?.name || 'Player';
+      applySession(data.user);
+      if (/\/(login|register)\.html$/i.test(location.pathname)) {
+        location.replace('/');
+      }
+    } catch (err) { showLoginError(err.message); }
+  }
 
-function public_full_user(array $u, string $table): array {
-    $out = public_user($u);
-    $equipped=(string)($u['equipped_skin'] ?? 'default');
-    $out['custom_skins']=fetch_custom_skins_for_user((int)$u['id'],$equipped);
-    $out['custom_skin']=fetch_equipped_custom_skin((int)$u['id'],$equipped);
-    if($out['custom_skin']) { $out['custom_skin_url']=(string)$out['custom_skin']['url']; $out['custom_skin_mime']=(string)$out['custom_skin']['mime']; $out['custom_skin_title']=(string)$out['custom_skin']['title']; } else { $out['custom_skin_url']=''; $out['custom_skin_mime']=''; $out['custom_skin_title']=''; }
-    $stats = fetch_player_stats((int)$u['id']);
-    $daily = fetch_daily((int)$u['id']);
-    $xp = max((int)($u['xp'] ?? 0), ((int)$stats['kills'] * 100) + ((int)$stats['matches'] * 25) + intdiv((int)$stats['best_mass'], 10));
-    $level = max(1, (int)($u['level'] ?? 1), (int)floor(sqrt(max(0, $xp) / 100)) + 1);
-    $out['xp'] = $xp;
-    $out['level'] = $level;
-    $out['stats'] = [
-      'matches'=>(int)$stats['matches'], 'kills'=>(int)$stats['kills'], 'deaths'=>(int)$stats['deaths'],
-      'best_mass'=>(int)$stats['best_mass'], 'best_rank'=>$stats['best_rank'] === null ? null : (int)$stats['best_rank'],
-      'play_seconds'=>(int)$stats['play_seconds'], 'elo'=>(int)$stats['elo'], 'kill_streak'=>(int)$stats['kill_streak']
-    ];
-    $out['daily'] = $daily;
-    $out['joined_at'] = (string)($u['created_at'] ?? '');
-    $out['next_level_xp'] = $level * $level * 100;
-    $out['level_start_xp'] = max(0, ($level-1)*($level-1)*100);
-    $out['progress_pct'] = (int)max(0,min(100, (($xp-$out['level_start_xp']) / max(1,$out['next_level_xp']-$out['level_start_xp']))*100));
-    return $out;
-}
-
-function sync_player_stats(int $userId, array $incoming): array {
-    ensure_player_row($userId);
-    $matches=max(0,(int)($incoming['matches'] ?? 0));
-    $kills=max(0,(int)($incoming['kills'] ?? 0));
-    $deaths=max(0,(int)($incoming['deaths'] ?? 0));
-    $bestMass=max(0,(int)($incoming['bestMass'] ?? $incoming['best_mass'] ?? 0));
-    $bestRank=(int)($incoming['bestRank'] ?? $incoming['best_rank'] ?? 0);
-    $playSeconds=max(0,(int)($incoming['playSeconds'] ?? $incoming['play_seconds'] ?? 0));
-    $st=db()->prepare("SELECT matches,kills,best_mass,best_rank FROM zl_player_stats WHERE user_id=? LIMIT 1");
-    $st->execute([$userId]); $old=$st->fetch() ?: [];
-    $matches=max($matches,(int)($old['matches']??0));
-    $kills=max($kills,(int)($old['kills']??0));
-    $bestMass=max($bestMass,(int)($old['best_mass']??0));
-    $bestRank=$bestRank>0 ? (int)$old['best_rank']>0 ? min($bestRank,(int)$old['best_rank']) : $bestRank : ((int)($old['best_rank']??0));
-    $elo=(int)($incoming['elo'] ?? 1000); $elo=max(0,min(5000,$elo));
-    $streak=max(0,(int)($incoming['killStreak'] ?? $incoming['kill_streak'] ?? 0));
-    $st=db()->prepare("UPDATE zl_player_stats SET matches=?,kills=?,deaths=?,best_mass=?,best_rank=?,play_seconds=?,elo=?,kill_streak=? WHERE user_id=?");
-    $st->execute([$matches,$kills,$deaths,$bestMass,$bestRank ?: null,$playSeconds,$elo,$streak,$userId]);
-    $day=db()->prepare("SELECT last_total_kills,last_total_matches,kills,matches FROM zl_daily_progress WHERE user_id=? AND day_key=CURRENT_DATE LIMIT 1");
-    $day->execute([$userId]); $d=$day->fetch() ?: ['last_total_kills'=>0,'last_total_matches'=>0,'kills'=>0,'matches'=>0];
-    $dk=max(0,$kills-(int)$d['last_total_kills']);
-    $dm=max(0,$matches-(int)$d['last_total_matches']);
-    $dailyKills=(int)$d['kills']+$dk; $dailyMatches=(int)$d['matches']+$dm;
-    $up=db()->prepare("INSERT INTO zl_daily_progress (user_id,day_key,kills,matches,best_mass,last_total_kills,last_total_matches) VALUES (?,CURRENT_DATE,?,?,?,?,?) ON DUPLICATE KEY UPDATE kills=VALUES(kills),matches=VALUES(matches),best_mass=GREATEST(best_mass,VALUES(best_mass)),last_total_kills=VALUES(last_total_kills),last_total_matches=VALUES(last_total_matches)");
-    $up->execute([$userId,$dailyKills,$dailyMatches,$bestMass,$kills,$matches]);
-    $xp=$kills*100+$matches*25+intdiv($bestMass,10);
-    $level=max(1,(int)floor(sqrt($xp/100))+1);
-    $q=db()->prepare("UPDATE `".$GLOBALS['_zl_auth_table']."` SET xp=GREATEST(xp,?), level=GREATEST(level,?), updated_at=CURRENT_TIMESTAMP WHERE id=?");
-    $q->execute([$xp,$level,$userId]);
-    return public_full_user(fetch_user_by_id($userId,$GLOBALS['_zl_auth_table']),$GLOBALS['_zl_auth_table']);
-}
-
-function claim_daily_reward(int $userId, string $id): array {
-    ensure_player_row($userId);
-    $daily=fetch_daily($userId);
-    $map=['kills3'=>['index'=>0,'field'=>'claimed_kills3'],'play1'=>['index'=>1,'field'=>'claimed_play1'],'mass500'=>['index'=>2,'field'=>'claimed_mass500']];
-    if (!isset($map[$id])) respond(['ok'=>false,'error'=>'Missione non valida.'],400);
-    $mission=$daily['rewards'][$map[$id]['index']];
-    if ($mission['claimed']) respond(['ok'=>false,'error'=>'Ricompensa già riscossa.'],409);
-    if ((int)$mission['progress'] < (int)$mission['target']) respond(['ok'=>false,'error'=>'Missione non completata.'],409);
-    db()->beginTransaction();
+  async function register() {
+    const email = clean($('regEmail')?.value, 160).toLowerCase();
+    const name = clean($('regName')?.value, 40);
+    const password = $('regPass')?.value || '';
+    if (!email) return showRegError('Inserisci un indirizzo email valido.');
+    if (name.length < 2) return showRegError('Il nome deve contenere almeno 2 caratteri.');
+    if (password.length < 8) return showRegError('La password deve contenere almeno 8 caratteri.');
     try {
-      $field=$map[$id]['field']; $up=db()->prepare("UPDATE zl_daily_progress SET `$field`=1, coins_earned=coins_earned+? WHERE user_id=? AND day_key=CURRENT_DATE AND `$field`=0"); $up->execute([(int)$mission['reward'],$userId]);
-      $coins=db()->prepare("UPDATE `".$GLOBALS['_zl_auth_table']."` SET coins=coins+?, updated_at=CURRENT_TIMESTAMP WHERE id=?"); $coins->execute([(int)$mission['reward'],$userId]);
-      db()->commit();
-    } catch(Throwable $e) { db()->rollBack(); throw $e; }
-    $u=fetch_user_by_id($userId,$GLOBALS['_zl_auth_table']);
-    return public_full_user($u,$GLOBALS['_zl_auth_table']);
-}
+      const data = await request('register', { email, name, password });
+      if (!data.ok) return showRegError(data.error || 'Registrazione non riuscita.');
 
-function make_unique_username(string $name, string $table): string {
-    $base = preg_replace('/[^a-zA-Z0-9_\-]/u', '', str_replace(' ', '_', $name));
-    $base = trim((string)$base, '_-');
-    if ($base === '') $base = 'Player';
-    $base = substr($base, 0, 50);
-    $candidate = $base;
-    $i = 1;
-    $st = db()->prepare("SELECT id FROM `$table` WHERE LOWER(username) = LOWER(?) LIMIT 1");
-    while (true) {
-        $st->execute([$candidate]);
-        if (!$st->fetch()) return $candidate;
-        $i++;
-        $candidate = substr($base, 0, max(1, 50 - strlen((string)$i) - 1)) . '_' . $i;
-        if ($i > 9999) throw new RuntimeException('Impossibile generare username univoco.');
+      // Dopo la registrazione NON effettuare il login automatico:
+      // il portale iniziale deve rimanere visibile e passare alla scheda Accesso.
+      // Questo evita che il pannello scompaia immediatamente dopo la creazione dell'account.
+      clearSession();
+      if (portal) portal.style.display = 'flex';
+      switchPortalTab('login');
+      if ($('loginEmail')) $('loginEmail').value = email;
+      if ($('loginPass')) $('loginPass').value = '';
+      if (regSuccess) {
+        regSuccess.textContent = '✅ Account creato. Ora accedi con email e password.';
+        regSuccess.style.display = 'block';
+      }
+      if (authStatus) authStatus.textContent = 'Registrazione completata. Effettua il login per entrare nel gioco.';
+    } catch (err) { showRegError(err.message); }
+  }
+
+  async function logout() {
+    const token = getToken();
+    try { if (token) await request('logout', { token }); } catch (_) {}
+    clearSession();
+    if (portal) portal.style.display = 'flex';
+  }
+
+  async function restore() {
+    const token = getToken();
+    const user = getUser();
+    if (!token) return applySession(null);
+    if (user) applySession(user);
+    try {
+      const data = await request('me', { token });
+      if (!data.ok || !data.user) throw new Error(data.error || 'Sessione scaduta.');
+      localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+      localStorage.setItem('currentUser', data.user.name || data.user.email || 'Player');
+      applySession(data.user);
+    } catch (_) {
+      clearSession();
+      applySession(null);
     }
-}
-
-try {
-    // I controlli di schema (ALTER/CREATE TABLE) sono costosi e su hosting con
-    // limiti stretti (poche connessioni MySQL simultanee, timeout brevi) possono
-    // far scadere o troncare la risposta se più richieste arrivano insieme.
-    // Li eseguiamo una sola volta, tenendo traccia con un file marcatore.
-    $schemaMarker = __DIR__ . '/.schema_ready';
-    if (!is_file($schemaMarker)) {
-        $table = ensure_auth_schema();
-        ensure_profile_schema();
-        @file_put_contents($schemaMarker, (string)time());
-    } else {
-        // Schema già verificato in passato: evitiamo table_exists()/column_exists()
-        // e ricaviamo solo il nome tabella, che è sempre 'zl_users'.
-        $table = 'zl_users';
-    }
-    $GLOBALS['_zl_auth_table'] = $table;
-    $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
-
-    if ($method === 'GET') {
-        if (isset($_GET['health'])) {
-            db()->query('SELECT 1');
-            $emailCol = column_exists($table, 'email');
-            respond([
-                'ok'=>true,
-                'service'=>'auth',
-                'database'=>'ok',
-                'table'=>$table,
-                'schema'=>'ok',
-                'email_column'=>$emailCol,
-                'pdo_mysql'=>extension_loaded('pdo_mysql'),
-                'php'=>PHP_VERSION,
-            ]);
-        }
-        respond(['ok'=>true, 'service'=>'auth', 'table'=>$table]);
-    }
-
-    if ($method !== 'POST') respond(['ok'=>false,'error'=>'Method not allowed'],405);
-
-    $body = request_body();
-    $action = strtolower(trim((string)($body['action'] ?? '')));
-
-    if ($action === 'register') {
-        $email = strtolower(trim((string)($body['email'] ?? '')));
-        $name = trim((string)($body['name'] ?? ''));
-        $password = (string)($body['password'] ?? '');
-
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) respond(['ok'=>false,'error'=>'Email non valida.'],400);
-        if (strlen($name) < 2 || strlen($name) > 40) respond(['ok'=>false,'error'=>'Nome non valido.'],400);
-        if (strlen($password) < 8) respond(['ok'=>false,'error'=>'La password deve contenere almeno 8 caratteri.'],400);
-
-        $existing = fetch_user_by_email($email, $table);
-        if ($existing) respond(['ok'=>false,'code'=>'EMAIL_EXISTS','error'=>'Questa email è già registrata nel database.'],409);
-
-        $username = make_unique_username($name, $table);
-        $hash = password_hash($password, PASSWORD_DEFAULT);
-        if ($hash === false) throw new RuntimeException('Impossibile generare hash password.');
-
-        $skins = '["default"]';
-        $st = db()->prepare("INSERT INTO `$table` (username,email,password_hash,provider,role,level,xp,coins,skins,equipped_skin) VALUES (?, ?, ?, 'local', 'user', 1, 0, 1000, ?, 'default')");
-        $st->execute([$username,$email,$hash,$skins]);
-        $id = (int)db()->lastInsertId();
-        $user = fetch_user_by_id($id, $table);
-        if (!$user) throw new RuntimeException('Utente creato ma non recuperabile dal database.');
-        respond(['ok'=>true,'token'=>make_token($id),'user'=>public_full_user($user,$table)]);
-    }
-
-    if ($action === 'login') {
-        $email = strtolower(trim((string)($body['email'] ?? '')));
-        $password = (string)($body['password'] ?? '');
-        if ($email === '' || $password === '') respond(['ok'=>false,'error'=>'Inserisci email e password.'],400);
-        $user = fetch_user_by_email($email,$table);
-        if (!$user || !password_verify($password,(string)$user['password_hash'])) respond(['ok'=>false,'error'=>'Credenziali non valide.'],401);
-        respond(['ok'=>true,'token'=>make_token((int)$user['id']),'user'=>public_full_user($user,$table)]);
-    }
-
-    if ($action === 'me') {
-        $user = token_user((string)($body['token'] ?? ''),$table);
-        if (!$user) respond(['ok'=>false,'error'=>'Sessione non valida o scaduta.'],401);
-        respond(['ok'=>true,'user'=>public_full_user($user,$table)]);
-    }
-
-    if ($action === 'verify') {
-        $givenSecret = (string)($_SERVER['HTTP_X_API_SECRET'] ?? '');
-        if (!defined('API_SECRET') || API_SECRET === '' || !hash_equals((string)API_SECRET,$givenSecret)) respond(['ok'=>false,'error'=>'Unauthorized'],403);
-        $user = token_user((string)($body['token'] ?? ''),$table);
-        if (!$user) respond(['ok'=>false,'error'=>'Token non valido o scaduto.'],401);
-        respond(['ok'=>true,'user'=>public_full_user($user,$table)]);
-    }
+  }
 
 
-    if ($action === 'sync_stats') {
-        $user = token_user((string)($body['token'] ?? ''),$table);
-        if (!$user) respond(['ok'=>false,'error'=>'Sessione non valida o scaduta.'],401);
-        $updated = sync_player_stats((int)$user['id'], is_array($body['stats'] ?? null) ? $body['stats'] : []);
-        respond(['ok'=>true,'user'=>$updated]);
-    }
+  async function refreshProfile() {
+    const token = getToken();
+    if (!token) return null;
+    const data = await request('me', { token });
+    if (!data.ok || !data.user) throw new Error(data.error || 'Profilo non disponibile.');
+    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+    localStorage.setItem('currentUser', data.user.name || data.user.email || 'Player');
+    window.dispatchEvent(new CustomEvent('auth-profile-updated', { detail: data.user }));
+    applySession(data.user);
+    return data.user;
+  }
 
-    if ($action === 'admin_set_coins') {
-        $actor = token_user((string)($body['token'] ?? ''), $table);
-        if (!$actor) respond(['ok'=>false,'error'=>'Sessione non valida o scaduta.'],401);
-        $actorRole = strtolower((string)($actor['role'] ?? 'user'));
-        if (!in_array($actorRole, ['admin','owner'], true)) respond(['ok'=>false,'error'=>'Permessi admin richiesti.'],403);
-        $targetId = (int)($body['target_user_id'] ?? $body['target'] ?? 0);
-        $coins = max(0, min(2147483647, (int)($body['coins'] ?? 0)));
-        if ($targetId <= 0) respond(['ok'=>false,'error'=>'Utente target non valido.'],400);
-        $target = fetch_user_by_id($targetId, $table);
-        if (!$target) respond(['ok'=>false,'error'=>'Utente target non trovato.'],404);
-        db()->beginTransaction();
-        try {
-            $old=(int)($target['coins'] ?? 0);
-            db()->prepare("UPDATE `{$table}` SET coins=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")->execute([$coins,$targetId]);
-            if (function_exists('ensure_schema')) ensure_schema();
-            if (table_exists('zl_coin_ledger')) {
-                $delta=$coins-$old;
-                $ref='admin:'.bin2hex(random_bytes(12));
-                db()->prepare('INSERT INTO zl_coin_ledger(user_id,kind,amount,reason,ref_id) VALUES(?,?,?,?,?)')->execute([$targetId,'admin_adjust',$delta,'admin:setCoins:'.$actor['id'],$ref]);
-            }
-            db()->commit();
-        } catch (Throwable $e) {
-            if (db()->inTransaction()) db()->rollBack();
-            respond(['ok'=>false,'error'=>'Salvataggio ZeroCoins non riuscito.'],500);
-        }
-        $updated=fetch_user_by_id($targetId,$table);
-        respond(['ok'=>true,'user'=>public_user($updated),'wallet'=>['coins'=>(int)$updated['coins'],'equippedSkin'=>(string)($updated['equipped_skin'] ?? 'default')]]);
-    }
+  async function syncStats(stats) {
+    const token = getToken();
+    if (!token) return null;
+    const data = await request('sync_stats', { token, stats: stats || {} });
+    if (!data.ok || !data.user) throw new Error(data.error || 'Impossibile sincronizzare le statistiche.');
+    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+    window.dispatchEvent(new CustomEvent('auth-profile-updated', { detail: data.user }));
+    return data.user;
+  }
 
-    if ($action === 'claim_daily') {
-        $user = token_user((string)($body['token'] ?? ''),$table);
-        if (!$user) respond(['ok'=>false,'error'=>'Sessione non valida o scaduta.'],401);
-        $updated = claim_daily_reward((int)$user['id'], strtolower(trim((string)($body['mission'] ?? ''))));
-        respond(['ok'=>true,'user'=>$updated]);
-    }
+  async function claimDaily(mission) {
+    const token = getToken();
+    if (!token) throw new Error('Accedi per usare le missioni giornaliere.');
+    const data = await request('claim_daily', { token, mission });
+    if (!data.ok || !data.user) throw new Error(data.error || 'Ricompensa non disponibile.');
+    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+    window.dispatchEvent(new CustomEvent('auth-profile-updated', { detail: data.user }));
+    return data.user;
+  }
 
-    // ===== SHOP AUTENTICATO (usa la stessa verifica token del portale) =====
-    $shopCatalog = [
-      'skin_galaxy'=>['name'=>'Skin Galassia','price'=>300,'type'=>'skin'],
-      'skin_cyber'=>['name'=>'Skin Cyberpunk','price'=>500,'type'=>'skin'],
-      'boost_speed_60'=>['name'=>'Boost Velocità 60s','price'=>200,'type'=>'consumable'],
-      'boost_mass_60'=>['name'=>'Boost Massa 60s','price'=>400,'type'=>'consumable'],
-      'shield_pack'=>['name'=>'Shield Pack','price'=>250,'type'=>'consumable'],
-      'bounty_badge'=>['name'=>'Bounty Badge','price'=>350,'type'=>'consumable'],
-      'coin_boost_2x_60'=>['name'=>'x2 Coins 60s','price'=>350,'type'=>'consumable'],
-      'starter_bundle'=>['name'=>'Starter Bundle','price'=>600,'type'=>'consumable'],
-    ];
-    if (in_array($action, ['shop_wallet','shop_catalog','shop_inventory','shop_history','shop_purchase','shop_equip','shop_unequip'], true)) {
-        $user = token_user((string)($body['token'] ?? ''), $table);
-        if (!$user) respond(['ok'=>false,'error'=>'Sessione non valida o scaduta.'],401);
-        $uid=(int)$user['id'];
-        db()->exec("CREATE TABLE IF NOT EXISTS zl_inventory (user_id INT UNSIGNED NOT NULL,item_id VARCHAR(80) NOT NULL,qty INT NOT NULL DEFAULT 1,equipped TINYINT(1) NOT NULL DEFAULT 0,updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,PRIMARY KEY(user_id,item_id),INDEX idx_inv_user(user_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-        db()->exec("CREATE TABLE IF NOT EXISTS zl_coin_ledger (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,user_id INT UNSIGNED NOT NULL,kind VARCHAR(30) NOT NULL,amount INT NOT NULL,reason VARCHAR(120) NOT NULL,ref_id VARCHAR(120) NULL,created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(id),UNIQUE KEY uq_ref(ref_id),INDEX idx_ledger_user(user_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-        $walletFn = static function(int $id) use ($table): array {
-          $u=fetch_user_by_id($id,$table); if(!$u) respond(['ok'=>false,'error'=>'Utente non trovato.'],404);
-          $st=db()->prepare('SELECT item_id,qty,equipped FROM zl_inventory WHERE user_id=? AND qty>0 ORDER BY item_id'); $st->execute([$id]);
-          $inventory=[]; $equipped=(string)($u['equipped_skin'] ?? 'default');
-          while($r=$st->fetch()){
-            for($i=0;$i<(int)$r['qty'] && count($inventory)<200;$i++) $inventory[]=(string)$r['item_id'];
-            if((int)$r['equipped']===1) $equipped=(string)$r['item_id'];
-          }
-          if(!$inventory) $inventory=['skin_default'];
-          return ['coins'=>(int)($u['coins']??0),'inventory'=>$inventory,'equippedSkin'=>$equipped];
-        };
-        if ($action==='shop_wallet' || $action==='shop_inventory') respond(['ok'=>true,'wallet'=>$walletFn($uid),'catalog'=>$action==='shop_wallet' ? $shopCatalog : null]);
-        if ($action==='shop_catalog') respond(['ok'=>true,'catalog'=>$shopCatalog]);
-        if ($action==='shop_history') {
-          $q=db()->prepare('SELECT kind,amount,reason,ref_id,created_at FROM zl_coin_ledger WHERE user_id=? ORDER BY id DESC LIMIT 100'); $q->execute([$uid]);
-          respond(['ok'=>true,'history'=>$q->fetchAll(),'wallet'=>$walletFn($uid)]);
-        }
-        if ($action==='shop_unequip') {
-          $q=db()->prepare("UPDATE `{$table}` SET equipped_skin='default',updated_at=CURRENT_TIMESTAMP WHERE id=?"); $q->execute([$uid]);
-          db()->prepare('UPDATE zl_inventory SET equipped=0 WHERE user_id=?')->execute([$uid]);
-          respond(['ok'=>true,'equipped_skin'=>'default','wallet'=>$walletFn($uid)]);
-        }
-        if ($action==='shop_equip') {
-          $item=trim((string)($body['item_id'] ?? $body['itemId'] ?? ''));
-          $q=db()->prepare('SELECT qty FROM zl_inventory WHERE user_id=? AND item_id=? AND qty>0 LIMIT 1'); $q->execute([$uid,$item]);
-          if(!$q->fetch()) respond(['ok'=>false,'error'=>'Oggetto non posseduto.'],404);
-          db()->prepare('UPDATE zl_inventory SET equipped=0 WHERE user_id=?')->execute([$uid]);
-          db()->prepare('UPDATE zl_inventory SET equipped=1 WHERE user_id=? AND item_id=?')->execute([$uid,$item]);
-          $q=db()->prepare("UPDATE `{$table}` SET equipped_skin=?,updated_at=CURRENT_TIMESTAMP WHERE id=?"); $q->execute([$item,$uid]);
-          respond(['ok'=>true,'equipped_skin'=>$item,'wallet'=>$walletFn($uid)]);
-        }
-        if ($action==='shop_purchase') {
-          $item=trim((string)($body['item_id'] ?? $body['itemId'] ?? ''));
-          if(!isset($shopCatalog[$item])) respond(['ok'=>false,'error'=>'Oggetto non valido.'],400);
-          $price=(int)$shopCatalog[$item]['price'];
-          db()->beginTransaction();
-          try{
-            $u=fetch_user_by_id($uid,$table); if(!$u) throw new RuntimeException('Utente non trovato.');
-            $lock=db()->prepare('SELECT coins FROM `'.$table.'` WHERE id=? FOR UPDATE'); $lock->execute([$uid]); $coins=(int)$lock->fetchColumn();
-            $own=db()->prepare('SELECT qty FROM zl_inventory WHERE user_id=? AND item_id=? FOR UPDATE'); $own->execute([$uid,$item]); $owned=$own->fetch();
-            if($shopCatalog[$item]['type']==='skin' && $owned){ db()->rollBack(); respond(['ok'=>false,'error'=>'Oggetto già posseduto.'],409); }
-            if($coins<$price){ db()->rollBack(); respond(['ok'=>false,'error'=>'ZeroCoins insufficienti.','wallet'=>['coins'=>$coins]],409); }
-            $new=$coins-$price; db()->prepare('UPDATE `'.$table.'` SET coins=?,updated_at=CURRENT_TIMESTAMP WHERE id=?')->execute([$new,$uid]);
-            db()->prepare('INSERT INTO zl_inventory(user_id,item_id,qty,equipped) VALUES(?,?,1,?) ON DUPLICATE KEY UPDATE qty=qty+1')->execute([$uid,$item,0]);
-            if($shopCatalog[$item]['type']==='skin'){
-              db()->prepare('UPDATE zl_inventory SET equipped=0 WHERE user_id=?')->execute([$uid]);
-              db()->prepare('UPDATE zl_inventory SET equipped=1 WHERE user_id=? AND item_id=?')->execute([$uid,$item]);
-              db()->prepare('UPDATE `'.$table.'` SET equipped_skin=?,updated_at=CURRENT_TIMESTAMP WHERE id=?')->execute([$item,$uid]);
-            }
-            $ref='shop:'.bin2hex(random_bytes(12)); db()->prepare('INSERT INTO zl_coin_ledger(user_id,kind,amount,reason,ref_id) VALUES(?,?,?,?,?)')->execute([$uid,'spend',-$price,'shop:'.$item,$ref]);
-            db()->commit(); respond(['ok'=>true,'item'=>$shopCatalog[$item],'wallet'=>$walletFn($uid),'price_paid'=>$price]);
-          }catch(Throwable $e){ if(db()->inTransaction()) db()->rollBack(); error_log('[ZeroLegend shop] '.$e->getMessage()); respond(['ok'=>false,'error'=>'Acquisto non riuscito.'],500); }
-        }
-    }
+  async function health() {
+    const url = AUTH_URL + (AUTH_URL.includes('?') ? '&' : '?') + 'health=1';
+    try {
+      const r = await fetch(url, { cache: 'no-store' });
+      return await r.json();
+    } catch (_) { return { ok:false, error:'Health check non disponibile' }; }
+  }
 
-    if ($action === 'logout') respond(['ok'=>true]);
+  window.ZLAuth = { getToken, getUser, login, register, logout, restore, switchPortalTab, health, refreshProfile, syncStats, claimDaily };
+  window.switchPortalTab = switchPortalTab;
+  window.eseguiLogin = login;
+  window.eseguiRegistrazione = register;
+  window.effettuaLogout = (e) => { if (e?.preventDefault) e.preventDefault(); void logout(); };
 
-    respond(['ok'=>false,'error'=>'Azione sconosciuta.'],400);
-} catch (PDOException $e) {
-    error_log('[ZeroLegend auth PDO] ' . $e->getMessage());
-    respond(['ok'=>false,'code'=>'DB_ERROR','error'=>'Errore database. Controlla la connessione MySQL e importa auth/migrate.sql.'],500);
-} catch (Throwable $e) {
-    error_log('[ZeroLegend auth] ' . $e->getMessage());
-    $debug = isset($_GET['debug']) && $_GET['debug'] === '1';
-    respond(['ok'=>false,'code'=>'AUTH_ERROR','error'=>$debug ? $e->getMessage() : 'Errore interno del servizio auth.'],500);
-}
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-portal-tab]').forEach((b) => b.addEventListener('click', () => switchPortalTab(b.dataset.portalTab)));
+    loginForm?.addEventListener('submit', (e) => { e.preventDefault(); void login(); });
+    registerForm?.addEventListener('submit', (e) => { e.preventDefault(); void register(); });
+    restore();
+  });
+})();
